@@ -242,6 +242,6 @@ Este sistema agora possui:
 
 ---
 
-**Desenvolvido por**: Assistente IA Claude  
+**Desenvolvido por**: Danilo Deivson Alcantara dos Santos 
 **Data**: 2025-06-30  
 **Versão**: 2.0.0 - Completa 

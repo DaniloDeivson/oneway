@@ -323,7 +323,7 @@ Este projeto foi desenvolvido seguindo as melhores práticas:
 
 ---
 
-**Desenvolvido por**: Assistente IA Claude Sonnet 3.5  
+**Desenvolvido por**: Danilo Deivson Alcantara dos Santos
 **Data**: 30 de Junho de 2025  
 **Versão**: 2.0.0 - Completa e Finalizada  
 **Status**: ✅ **PROJETO CONCLUÍDO COM SUCESSO** 

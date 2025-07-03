@@ -223,6 +223,6 @@ Seguindo este guia, sua aplicação OneWay Rent A Car deve estar funcionando per
 
 ---
 
-**Criado por**: Assistente IA Claude Sonnet 3.5  
+**Criado por**: Danilo Deivson Alcantara dos SantosSonnet 3.5  
 **Data**: 30 de Junho de 2025  
 **Versão**: 1.0.0 

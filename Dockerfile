@@ -12,6 +12,10 @@ RUN npm ci
 # Copy source code
 COPY . .
 
+# Set environment variables for Supabase
+ENV VITE_SUPABASE_URL=https://bdcqaeppqnwixhumfsso.supabase.co
+ENV VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJkY3FhZXBwcW53aXhodW1mc3NvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTEyMTM0MTcsImV4cCI6MjA2Njc4OTQxN30.p0BSXUgjstOMOuli_Ko7Kf8Z-T7fb5ozp9qWr-tK_tc
+
 # Set executable permissions for node_modules binaries
 RUN chmod +x node_modules/.bin/*
 

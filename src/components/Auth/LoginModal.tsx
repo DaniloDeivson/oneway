@@ -47,15 +47,16 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
 
   // Close modal when user is logged in
   useEffect(() => {
-    if (user && isOpen && !isSubmitting) {
+    if (user && isOpen) {
       console.log('User logged in, closing modal and redirecting...');
       reset();
       setErrorMsg(null);
+      setIsSubmitting(false);
       onClose();
       // Use React Router navigation instead of window.location
       navigate('/', { replace: true });
     }
-  }, [user, isOpen, isSubmitting, onClose, reset, navigate]);
+  }, [user, isOpen, onClose, reset, navigate]);
 
   // Reset form when modal opens
   useEffect(() => {

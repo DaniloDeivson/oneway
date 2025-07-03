@@ -103,6 +103,7 @@ export const useAuth = () => {
               console.error('Error fetching employee data:', employeeError);
               setUser(null);
               setError('Usuário não encontrado no sistema');
+              setLoading(false);
               return;
             }
             
@@ -115,29 +116,31 @@ export const useAuth = () => {
                 permissions: employeeData.permissions || {}
               });
               setError(null);
+              setLoading(false);
+              console.log('User authenticated via onAuthStateChange');
             } else {
               setUser(null);
               setError('Usuário inativo ou não encontrado');
+              setLoading(false);
             }
           } catch (err) {
             if (!isMounted) return;
             console.error('Error in auth state change:', err);
             setUser(null);
             setError('Erro ao carregar dados do usuário');
+            setLoading(false);
           }
         } else if (event === 'SIGNED_OUT') {
           if (!isMounted) return;
           setUser(null);
           setError(null);
-        }
-        
-        if (isMounted) {
           setLoading(false);
         }
       }
     );
     
     return () => {
+      isMounted = false;
       subscription.unsubscribe();
     };
   }, []);
@@ -162,11 +165,10 @@ export const useAuth = () => {
       // User will be set by the onAuthStateChange listener
       toast.success('Login realizado com sucesso!');
       
-      // Loading will be set to false by the auth state change listener
-      // No need for artificial delay
+      // Don't set loading to false here - let onAuthStateChange handle it
       
     } catch (err) {
-      setLoading(false); // Set loading to false immediately on error
+      setLoading(false); // Only set loading to false on error
       setError(err instanceof Error ? err.message : 'Credenciais inválidas');
       toast.error('Falha no login: ' + (err instanceof Error ? err.message : 'Credenciais inválidas'));
       throw err;
@@ -175,16 +177,25 @@ export const useAuth = () => {
 
   const logout = async () => {
     try {
+      console.log('Starting logout process...');
       setLoading(true);
       
-      // Sign out from Supabase
-      await supabase.auth.signOut();
-      
-      // Clear the user state
+      // Clear the user state first
       setUser(null);
+      setError(null);
       
+      // Sign out from Supabase
+      const { error } = await supabase.auth.signOut();
+      
+      if (error) {
+        console.error('Supabase logout error:', error);
+        throw error;
+      }
+      
+      console.log('Logout successful');
       toast.success('Logout realizado com sucesso!');
     } catch (err) {
+      console.error('Logout error:', err);
       setError(err instanceof Error ? err.message : 'Failed to logout');
       toast.error('Erro ao fazer logout');
       throw err;

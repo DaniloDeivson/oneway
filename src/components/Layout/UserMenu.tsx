@@ -26,10 +26,13 @@ export const UserMenu: React.FC = () => {
 
   const handleLogout = async () => {
     try {
+      console.log('UserMenu: Starting logout...');
+      setIsOpen(false); // Close menu first
       await logout();
-      navigate('/login');
+      console.log('UserMenu: Logout successful, navigating to login...');
+      navigate('/login', { replace: true });
     } catch (error) {
-      console.error('Logout failed:', error);
+      console.error('UserMenu: Logout failed:', error);
     }
   };
 
@@ -102,23 +105,27 @@ export const UserMenu: React.FC = () => {
             {getAdditionalRolesBadges()}
           </div>
           
-          <a
-            href="/profile"
-            className="block px-3 py-2 text-sm text-secondary-700 hover:bg-secondary-100 flex items-center"
-            onClick={() => setIsOpen(false)}
+          <button
+            onClick={() => {
+              setIsOpen(false);
+              navigate('/profile');
+            }}
+            className="block w-full text-left px-3 py-2 text-sm text-secondary-700 hover:bg-secondary-100 flex items-center"
           >
             <User className="h-4 w-4 mr-2 text-secondary-500" />
             Meu Perfil
-          </a>
+          </button>
           
-          <a
-            href="/admin"
-            className="block px-3 py-2 text-sm text-secondary-700 hover:bg-secondary-100 flex items-center"
-            onClick={() => setIsOpen(false)}
+          <button
+            onClick={() => {
+              setIsOpen(false);
+              navigate('/admin');
+            }}
+            className="block w-full text-left px-3 py-2 text-sm text-secondary-700 hover:bg-secondary-100 flex items-center"
           >
             <Settings className="h-4 w-4 mr-2 text-secondary-500" />
             Configurações
-          </a>
+          </button>
           
           <div className="border-t border-secondary-200 mt-1"></div>
           

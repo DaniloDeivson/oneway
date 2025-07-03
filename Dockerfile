@@ -18,6 +18,9 @@ RUN chmod +x node_modules/.bin/*
 # Build the application using npx to ensure proper execution
 RUN npx vite build
 
+# List contents of dist directory for debugging
+RUN ls -la /app/dist/
+
 # Production stage
 FROM nginx:alpine AS production
 
@@ -26,6 +29,12 @@ COPY --from=build /app/dist /usr/share/nginx/html
 
 # Copy nginx configuration
 COPY nginx.conf /etc/nginx/nginx.conf
+
+# Create a simple test file
+RUN echo '<!DOCTYPE html><html><head><title>Test</title></head><body><h1>Nginx Test OK</h1></body></html>' > /usr/share/nginx/html/test.html
+
+# List contents for debugging
+RUN ls -la /usr/share/nginx/html/
 
 EXPOSE 80
 

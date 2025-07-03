@@ -26,7 +26,7 @@ interface LoginModalProps {
 }
 
 const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
-  const { login, user } = useAuth();
+  const { login, user, loading } = useAuth();
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -48,15 +48,27 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
   // Close modal when user is logged in
   useEffect(() => {
     if (user && isOpen) {
-      console.log('User logged in, closing modal and redirecting...');
+      console.log('LoginModal: User detected, closing modal and redirecting...');
       reset();
       setErrorMsg(null);
       setIsSubmitting(false);
       onClose();
-      // Use React Router navigation instead of window.location
-      navigate('/', { replace: true });
+      
+      // Usar timeout para garantir que o estado seja atualizado
+      setTimeout(() => {
+        navigate('/', { replace: true });
+      }, 100);
     }
   }, [user, isOpen, onClose, reset, navigate]);
+
+  // Também verificar mudanças no loading
+  useEffect(() => {
+    if (user && !loading && isOpen) {
+      console.log('LoginModal: User authenticated and loading finished, redirecting...');
+      onClose();
+      navigate('/', { replace: true });
+    }
+  }, [user, loading, isOpen, onClose, navigate]);
 
   // Reset form when modal opens
   useEffect(() => {

@@ -30,9 +30,13 @@ export const UserMenu: React.FC = () => {
       setIsOpen(false); // Close menu first
       await logout();
       console.log('UserMenu: Logout successful, navigating to login...');
-      navigate('/login', { replace: true });
     } catch (error) {
       console.error('UserMenu: Logout failed:', error);
+      // Even if logout fails, still redirect to login page
+      console.log('UserMenu: Redirecting to login despite logout error...');
+    } finally {
+      // Always navigate to login regardless of logout success/failure
+      navigate('/login', { replace: true });
     }
   };
 

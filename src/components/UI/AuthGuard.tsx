@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { Loader2 } from 'lucide-react';
@@ -19,12 +19,26 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({
   const { user, loading, hasPermission, isAdmin, isManager } = useAuth();
   const location = useLocation();
 
+  // Log detalhado para debug
+  useEffect(() => {
+    console.log('AuthGuard State:', {
+      loading,
+      hasUser: !!user,
+      userRole: user?.role,
+      path: location.pathname,
+      timestamp: new Date().toISOString()
+    });
+  }, [loading, user, location.pathname]);
+
   console.log('AuthGuard - Loading:', loading, 'User:', !!user, 'Path:', location.pathname);
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary-600 mx-auto mb-2" />
+          <p className="text-gray-500">Carregando...</p>
+        </div>
       </div>
     );
   }

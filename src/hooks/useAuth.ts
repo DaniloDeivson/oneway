@@ -44,10 +44,7 @@ export const useAuth = () => {
             console.error('Error fetching employee data:', employeeError);
             setUser(null);
             setError('Usuário não encontrado no sistema');
-            return;
-          }
-          
-          if (employeeData && employeeData.active) {
+          } else if (employeeData && employeeData.active) {
             setUser({
               id: employeeData.id,
               email: employeeData.contact_info?.email || session.user.email || '',
@@ -78,14 +75,12 @@ export const useAuth = () => {
     
     checkSession();
     
-    return () => {
-      isMounted = false;
-    };
-    
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (!isMounted) return;
+        
+        console.log('Auth state changed:', event);
         
         if (event === 'SIGNED_IN' && session) {
           try {
@@ -103,11 +98,7 @@ export const useAuth = () => {
               console.error('Error fetching employee data:', employeeError);
               setUser(null);
               setError('Usuário não encontrado no sistema');
-              setLoading(false);
-              return;
-            }
-            
-            if (employeeData && employeeData.active) {
+            } else if (employeeData && employeeData.active) {
               setUser({
                 id: employeeData.id,
                 email: employeeData.contact_info?.email || session.user.email || '',
@@ -116,18 +107,20 @@ export const useAuth = () => {
                 permissions: employeeData.permissions || {}
               });
               setError(null);
-              setLoading(false);
               console.log('User authenticated via onAuthStateChange');
             } else {
               setUser(null);
               setError('Usuário inativo ou não encontrado');
-              setLoading(false);
             }
           } catch (err) {
             if (!isMounted) return;
             console.error('Error in auth state change:', err);
             setUser(null);
             setError('Erro ao carregar dados do usuário');
+          }
+          
+          // SEMPRE definir loading como false após processar login
+          if (isMounted) {
             setLoading(false);
           }
         } else if (event === 'SIGNED_OUT') {
@@ -165,7 +158,10 @@ export const useAuth = () => {
       // User will be set by the onAuthStateChange listener
       toast.success('Login realizado com sucesso!');
       
-      // Don't set loading to false here - let onAuthStateChange handle it
+      // Garantir que loading seja false após 3 segundos como fallback
+      setTimeout(() => {
+        setLoading(false);
+      }, 3000);
       
     } catch (err) {
       setLoading(false); // Only set loading to false on error
@@ -184,21 +180,37 @@ export const useAuth = () => {
       setUser(null);
       setError(null);
       
-      // Sign out from Supabase
-      const { error } = await supabase.auth.signOut();
+      // Check if there's an active session before trying to sign out
+      const { data: { session } } = await supabase.auth.getSession();
       
-      if (error) {
-        console.error('Supabase logout error:', error);
-        throw error;
+      if (session) {
+        // Only try to sign out if there's an active session
+        const { error } = await supabase.auth.signOut();
+        
+        if (error) {
+          console.error('Supabase logout error:', error);
+          // Don't throw error for session missing - just log it
+          if (error.message !== 'Auth session missing!') {
+            throw error;
+          }
+        }
+      } else {
+        console.log('No active session found, skipping Supabase signOut');
       }
       
       console.log('Logout successful');
       toast.success('Logout realizado com sucesso!');
     } catch (err) {
       console.error('Logout error:', err);
-      setError(err instanceof Error ? err.message : 'Failed to logout');
-      toast.error('Erro ao fazer logout');
-      throw err;
+      // Don't show error to user for session issues
+      if (err instanceof Error && err.message.includes('Auth session missing')) {
+        console.log('Session was already expired, logout completed locally');
+        toast.success('Logout realizado com sucesso!');
+      } else {
+        setError(err instanceof Error ? err.message : 'Failed to logout');
+        toast.error('Erro ao fazer logout');
+        throw err;
+      }
     } finally {
       setLoading(false);
     }

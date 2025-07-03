@@ -27,12 +27,14 @@ import {
   Send,
   Mail,
   Download,
-  Printer
+  Printer,
+  TrendingUp,
+  Eye
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 // Componente para exibir detalhes de cobrança
-const ChargeDetailModal = ({ isOpen, onClose, charge, onMarkAsPaid }) => {
+const ChargeDetailModal = ({ isOpen, onClose, charge, onMarkAsPaid }: any) => {
   const [loading, setLoading] = useState(false);
 
   if (!isOpen || !charge) return null;
@@ -66,7 +68,10 @@ const ChargeDetailModal = ({ isOpen, onClose, charge, onMarkAsPaid }) => {
       'Diária Extra': 'warning',
       'Combustível': 'info',
       'Avaria': 'error',
-      'Multa': 'error'
+      'Multa': 'error',
+      'Manutenção': 'warning',
+      'Peças': 'info',
+      'Serviços': 'secondary'
     };
 
     return <Badge variant={variants[category] || 'secondary'}>{category}</Badge>;
@@ -137,12 +142,12 @@ const ChargeDetailModal = ({ isOpen, onClose, charge, onMarkAsPaid }) => {
                 <p className="font-medium text-lg">R$ {charge.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
               </div>
               <div>
-                <p className="text-sm text-secondary-600">Origem:</p>
-                <p className="font-medium">{charge.origin_description}</p>
-              </div>
-              <div>
                 <p className="text-sm text-secondary-600">Departamento:</p>
                 <p className="font-medium">{charge.department || 'Não especificado'}</p>
+              </div>
+              <div>
+                <p className="text-sm text-secondary-600">Status:</p>
+                <div className="mt-1">{getStatusBadge(charge.status)}</div>
               </div>
             </div>
             {charge.observations && (
@@ -193,9 +198,6 @@ export const Cobranca = () => {
     costs, 
     loading: costsLoading, 
     updateCost, 
-    getBillingCosts, 
-    generateBillingCosts, 
-    getBillingStatistics,
     markAsPaid 
   } = useCosts();
   const { vehicles } = useVehicles();
@@ -208,17 +210,15 @@ export const Cobranca = () => {
   const [categoryFilter, setCategoryFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [customerFilter, setCustomerFilter] = useState('');
+  const [departmentFilter, setDepartmentFilter] = useState('');
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [selectedCharge, setSelectedCharge] = useState(null);
 
-  // Filtrar apenas custos do departamento de Cobrança
-  const collectionCosts = costs.filter(cost => 
-    cost.department === 'Cobrança' || 
-    (cost.category === 'Multa' && cost.customer_id)
-  );
+  // Usar apenas custos para cobrança (simplificado)
+  const allCharges = costs;
 
-  // Aplicar filtros adicionais
-  const filteredCharges = collectionCosts.filter(charge => {
+  // Aplicar filtros
+  const filteredCharges = allCharges.filter((charge: any) => {
     const matchesSearch = 
       charge.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       charge.vehicle_plate?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -227,19 +227,23 @@ export const Cobranca = () => {
     const matchesCategory = categoryFilter === '' || charge.category === categoryFilter;
     const matchesStatus = statusFilter === '' || charge.status === statusFilter;
     const matchesCustomer = customerFilter === '' || charge.customer_id === customerFilter;
+    const matchesDepartment = departmentFilter === '' || charge.department === departmentFilter;
     
-    return matchesSearch && matchesCategory && matchesStatus && matchesCustomer;
+    return matchesSearch && matchesCategory && matchesStatus && matchesCustomer && matchesDepartment;
   });
 
-  // Estatísticas
+  // Estatísticas consolidadas
   const totalCharges = filteredCharges.length;
   const pendingCharges = filteredCharges.filter(c => c.status === 'Pendente').length;
+  const paidCharges = filteredCharges.filter(c => c.status === 'Pago').length;
   const totalAmount = filteredCharges.reduce((sum, c) => sum + c.amount, 0);
   const pendingAmount = filteredCharges.filter(c => c.status === 'Pendente').reduce((sum, c) => sum + c.amount, 0);
+  const paidAmount = filteredCharges.filter(c => c.status === 'Pago').reduce((sum, c) => sum + c.amount, 0);
   const uniqueCustomers = new Set(filteredCharges.map(c => c.customer_id).filter(Boolean)).size;
 
   // Categorias únicas para filtro
-  const categories = [...new Set(collectionCosts.map(c => c.category))];
+  const categories = [...new Set(allCharges.map(c => c.category))];
+  const departments = [...new Set(allCharges.map(c => c.department).filter(Boolean))];
 
   const handleViewDetail = (charge) => {
     setSelectedCharge(charge);
@@ -258,14 +262,8 @@ export const Cobranca = () => {
     }
   };
 
-  const handleGenerateBilling = async () => {
-    try {
-      const result = await generateBillingCosts();
-      toast.success(`Geradas ${result.generated_count} cobranças no valor de R$ ${result.total_amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`);
-    } catch (error) {
-      console.error('Error generating billing:', error);
-      toast.error('Erro ao gerar cobranças automáticas');
-    }
+  const handleGenerateBilling = () => {
+    toast.info('Funcionalidade de geração automática será implementada em breve!');
   };
 
   const getStatusBadge = (status) => {
@@ -284,7 +282,10 @@ export const Cobranca = () => {
       'Diária Extra': 'warning',
       'Combustível': 'info',
       'Avaria': 'error',
-      'Multa': 'error'
+      'Multa': 'error',
+      'Manutenção': 'warning',
+      'Peças': 'info',
+      'Serviços': 'secondary'
     };
 
     return <Badge variant={variants[category] || 'secondary'}>{category}</Badge>;
@@ -303,8 +304,8 @@ export const Cobranca = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl lg:text-3xl font-bold text-secondary-900">Cobrança</h1>
-          <p className="text-secondary-600 mt-1 lg:mt-2">Gerencie cobranças de clientes por danos, multas e adicionais</p>
+          <h1 className="text-2xl lg:text-3xl font-bold text-secondary-900">Cobrança Consolidada</h1>
+          <p className="text-secondary-600 mt-1 lg:mt-2">Visualização consolidada de todos os gastos: custos, multas, manutenção e avarias</p>
         </div>
         <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3 w-full sm:w-auto">
           <Button 
@@ -324,16 +325,16 @@ export const Cobranca = () => {
       </div>
 
       {/* Statistics Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 lg:gap-6">
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 lg:gap-4">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-secondary-600 text-xs lg:text-sm font-medium">Total de Cobranças</p>
+                <p className="text-secondary-600 text-xs lg:text-sm font-medium">Total</p>
                 <p className="text-xl lg:text-2xl font-bold text-secondary-900">{totalCharges}</p>
               </div>
-              <div className="h-8 w-8 lg:h-12 lg:w-12 bg-primary-100 rounded-lg flex items-center justify-center">
-                <Receipt className="h-4 w-4 lg:h-6 lg:w-6 text-primary-600" />
+              <div className="h-8 w-8 lg:h-10 lg:w-10 bg-primary-100 rounded-lg flex items-center justify-center">
+                <Receipt className="h-4 w-4 lg:h-5 lg:w-5 text-primary-600" />
               </div>
             </div>
           </CardContent>
@@ -344,12 +345,12 @@ export const Cobranca = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-secondary-600 text-xs lg:text-sm font-medium">Valor Total</p>
-                <p className="text-xl lg:text-2xl font-bold text-secondary-900">
+                <p className="text-lg lg:text-xl font-bold text-secondary-900">
                   R$ {totalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </p>
               </div>
-              <div className="h-8 w-8 lg:h-12 lg:w-12 bg-success-100 rounded-lg flex items-center justify-center">
-                <DollarSign className="h-4 w-4 lg:h-6 lg:w-6 text-success-600" />
+              <div className="h-8 w-8 lg:h-10 lg:w-10 bg-success-100 rounded-lg flex items-center justify-center">
+                <DollarSign className="h-4 w-4 lg:h-5 lg:w-5 text-success-600" />
               </div>
             </div>
           </CardContent>
@@ -365,8 +366,25 @@ export const Cobranca = () => {
                   R$ {pendingAmount.toLocaleString('pt-BR')}
                 </p>
               </div>
-              <div className="h-8 w-8 lg:h-12 lg:w-12 bg-warning-100 rounded-lg flex items-center justify-center">
-                <Clock className="h-4 w-4 lg:h-6 lg:w-6 text-warning-600" />
+              <div className="h-8 w-8 lg:h-10 lg:w-10 bg-warning-100 rounded-lg flex items-center justify-center">
+                <Clock className="h-4 w-4 lg:h-5 lg:w-5 text-warning-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-secondary-600 text-xs lg:text-sm font-medium">Pagos</p>
+                <p className="text-xl lg:text-2xl font-bold text-success-600">{paidCharges}</p>
+                <p className="text-xs text-success-600 mt-1">
+                  R$ {paidAmount.toLocaleString('pt-BR')}
+                </p>
+              </div>
+              <div className="h-8 w-8 lg:h-10 lg:w-10 bg-success-100 rounded-lg flex items-center justify-center">
+                <CheckCircle className="h-4 w-4 lg:h-5 lg:w-5 text-success-600" />
               </div>
             </div>
           </CardContent>
@@ -379,8 +397,8 @@ export const Cobranca = () => {
                 <p className="text-secondary-600 text-xs lg:text-sm font-medium">Clientes</p>
                 <p className="text-xl lg:text-2xl font-bold text-secondary-900">{uniqueCustomers}</p>
               </div>
-              <div className="h-8 w-8 lg:h-12 lg:w-12 bg-info-100 rounded-lg flex items-center justify-center">
-                <User className="h-4 w-4 lg:h-6 lg:w-6 text-info-600" />
+              <div className="h-8 w-8 lg:h-10 lg:w-10 bg-info-100 rounded-lg flex items-center justify-center">
+                <User className="h-4 w-4 lg:h-5 lg:w-5 text-info-600" />
               </div>
             </div>
           </CardContent>
@@ -390,13 +408,13 @@ export const Cobranca = () => {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-secondary-600 text-xs lg:text-sm font-medium">Avarias</p>
+                <p className="text-secondary-600 text-xs lg:text-sm font-medium">Multas</p>
                 <p className="text-xl lg:text-2xl font-bold text-secondary-900">
-                  {filteredCharges.filter(c => c.category === 'Avaria').length}
+                  {filteredCharges.filter(c => c.category === 'Multa').length}
                 </p>
               </div>
-              <div className="h-8 w-8 lg:h-12 lg:w-12 bg-error-100 rounded-lg flex items-center justify-center">
-                <AlertTriangle className="h-4 w-4 lg:h-6 lg:w-6 text-error-600" />
+              <div className="h-8 w-8 lg:h-10 lg:w-10 bg-error-100 rounded-lg flex items-center justify-center">
+                <AlertTriangle className="h-4 w-4 lg:h-5 lg:w-5 text-error-600" />
               </div>
             </div>
           </CardContent>
@@ -432,6 +450,17 @@ export const Cobranca = () => {
               </select>
               
               <select
+                value={departmentFilter}
+                onChange={(e) => setDepartmentFilter(e.target.value)}
+                className="border border-secondary-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
+              >
+                <option value="">Todos os Departamentos</option>
+                {departments.map(dept => (
+                  <option key={dept} value={dept}>{dept}</option>
+                ))}
+              </select>
+              
+              <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
                 className="border border-secondary-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
@@ -452,11 +481,6 @@ export const Cobranca = () => {
                   <option key={customer.id} value={customer.id}>{customer.name}</option>
                 ))}
               </select>
-              
-              <Button variant="secondary" size="sm">
-                <Filter className="h-4 w-4 mr-2" />
-                Filtros
-              </Button>
             </div>
           </div>
         </CardContent>
@@ -466,7 +490,7 @@ export const Cobranca = () => {
       <Card>
         <CardHeader className="p-4 lg:p-6">
           <h3 className="text-lg font-semibold text-secondary-900">
-            Cobranças ({filteredCharges.length})
+            Cobranças Consolidadas ({filteredCharges.length})
           </h3>
         </CardHeader>
         <CardContent className="p-0">
@@ -485,6 +509,9 @@ export const Cobranca = () => {
                         </span>
                       ) : 'Cliente não informado'}
                     </p>
+                    <p className="text-xs text-secondary-500 mt-1">
+                      Dept: {charge.department || 'N/A'}
+                    </p>
                   </div>
                   <div className="flex flex-col items-end">
                     {getCategoryBadge(charge.category)}
@@ -496,121 +523,125 @@ export const Cobranca = () => {
                     <Car className="h-4 w-4 mr-1 text-secondary-400" />
                     <span className="text-sm text-secondary-600">{charge.vehicle_plate || 'N/A'}</span>
                   </div>
-                  <p className="text-lg font-bold text-secondary-900">
-                    R$ {charge.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                  </p>
-                </div>
-                <div className="flex justify-between items-center mt-3 pt-3 border-t border-secondary-100">
-                  <span className="text-xs text-secondary-500">
-                    {new Date(charge.cost_date).toLocaleDateString('pt-BR')}
-                  </span>
-                  <div className="flex space-x-2">
-                    <Button 
-                      size="sm" 
+                  <div className="flex items-center space-x-2">
+                    <p className="text-lg font-bold text-secondary-900">
+                      R$ {charge.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </p>
+                    <Button
                       variant="secondary"
+                      size="sm"
                       onClick={() => handleViewDetail(charge)}
                     >
-                      Detalhes
+                      <Eye className="h-4 w-4" />
                     </Button>
-                    {charge.status === 'Pendente' && (
-                      <Button 
-                        size="sm" 
-                        variant="success"
-                        onClick={() => handleMarkAsPaid(charge.id)}
-                      >
-                        <CheckCircle className="h-4 w-4 mr-1" />
-                        Pago
-                      </Button>
-                    )}
                   </div>
                 </div>
               </div>
             ))}
           </div>
 
-          {/* Desktop table */}
-          <div className="hidden lg:block overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-secondary-50">
-                <tr>
-                  <th className="text-left py-3 px-6 text-sm font-medium text-secondary-600">Cliente</th>
-                  <th className="text-left py-3 px-6 text-sm font-medium text-secondary-600">Veículo</th>
-                  <th className="text-left py-3 px-6 text-sm font-medium text-secondary-600">Categoria</th>
-                  <th className="text-left py-3 px-6 text-sm font-medium text-secondary-600">Descrição</th>
-                  <th className="text-left py-3 px-6 text-sm font-medium text-secondary-600">Data</th>
-                  <th className="text-left py-3 px-6 text-sm font-medium text-secondary-600">Valor</th>
-                  <th className="text-left py-3 px-6 text-sm font-medium text-secondary-600">Status</th>
-                  <th className="text-left py-3 px-6 text-sm font-medium text-secondary-600">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-secondary-200">
-                {filteredCharges.map((charge) => (
-                  <tr key={charge.id} className="hover:bg-secondary-50">
-                    <td className="py-4 px-6">
-                      <div className="flex items-center">
-                        <User className="h-4 w-4 text-secondary-400 mr-2" />
-                        <div>
-                          <p className="text-sm font-medium text-secondary-900">{charge.customer_name || 'Não informado'}</p>
-                          {charge.contract_id && (
-                            <p className="text-xs text-secondary-500">Contrato #{charge.contract_id.substring(0, 8)}</p>
-                          )}
+          {/* Desktop view */}
+          <div className="hidden lg:block">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-secondary-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
+                      Descrição
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
+                      Cliente
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
+                      Veículo
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
+                      Categoria
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
+                      Departamento
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
+                      Valor
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
+                      Data
+                    </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-secondary-500 uppercase tracking-wider">
+                      Ações
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-secondary-200">
+                  {filteredCharges.map((charge) => (
+                    <tr key={charge.id} className="hover:bg-secondary-50">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-secondary-900">
+                          {charge.description}
                         </div>
-                      </div>
-                    </td>
-                    <td className="py-4 px-6">
-                      <div className="flex items-center">
-                        <Car className="h-4 w-4 text-secondary-400 mr-2" />
-                        <span className="text-sm text-secondary-900">{charge.vehicle_plate || 'N/A'}</span>
-                      </div>
-                    </td>
-                    <td className="py-4 px-6">
-                      {getCategoryBadge(charge.category)}
-                    </td>
-                    <td className="py-4 px-6 text-sm text-secondary-600 max-w-xs truncate" title={charge.description}>
-                      {charge.description}
-                    </td>
-                    <td className="py-4 px-6 text-sm text-secondary-600">
-                      {new Date(charge.cost_date).toLocaleDateString('pt-BR')}
-                    </td>
-                    <td className="py-4 px-6 text-sm font-medium text-secondary-900">
-                      R$ {charge.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                    </td>
-                    <td className="py-4 px-6">
-                      {getStatusBadge(charge.status)}
-                    </td>
-                    <td className="py-4 px-6">
-                      <div className="flex items-center space-x-2">
-                        <Button 
-                          size="sm" 
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-secondary-900">
+                          {charge.customer_name || 'Não informado'}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-secondary-900">
+                          {charge.vehicle_plate || 'N/A'}
+                        </div>
+                        <div className="text-sm text-secondary-500">
+                          {charge.vehicle_model || ''}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {getCategoryBadge(charge.category)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-secondary-900">
+                          {charge.department || 'N/A'}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-secondary-900">
+                          R$ {charge.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {getStatusBadge(charge.status)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-secondary-900">
+                          {new Date(charge.cost_date).toLocaleDateString('pt-BR')}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <Button
                           variant="secondary"
+                          size="sm"
                           onClick={() => handleViewDetail(charge)}
                         >
-                          Detalhes
+                          <Eye className="h-4 w-4 mr-1" />
+                          Ver
                         </Button>
-                        {charge.status === 'Pendente' && (
-                          <Button 
-                            size="sm" 
-                            variant="success"
-                            onClick={() => handleMarkAsPaid(charge.id)}
-                          >
-                            <CheckCircle className="h-4 w-4 mr-1" />
-                            Pago
-                          </Button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
 
           {filteredCharges.length === 0 && (
-            <div className="text-center py-8">
+            <div className="text-center py-12">
               <Receipt className="h-12 w-12 text-secondary-400 mx-auto mb-4" />
-              <p className="text-secondary-600">Nenhuma cobrança encontrada</p>
-              <p className="text-sm text-secondary-500 mt-2">
-                As cobranças são geradas automaticamente a partir de multas, danos e adicionais de contrato
+              <h3 className="text-lg font-medium text-secondary-900 mb-2">
+                Nenhuma cobrança encontrada
+              </h3>
+              <p className="text-secondary-600">
+                Não há cobranças que correspondam aos filtros selecionados.
               </p>
             </div>
           )}

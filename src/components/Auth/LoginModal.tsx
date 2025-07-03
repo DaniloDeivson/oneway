@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { X, Mail, Lock, Eye, EyeOff, LogIn, Loader2 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
+import { useNavigate } from 'react-router-dom';
 
 const loginSchema = z.object({
   email: z
@@ -26,6 +27,7 @@ interface LoginModalProps {
 
 const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
   const { login, user } = useAuth();
+  const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -50,10 +52,10 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
       reset();
       setErrorMsg(null);
       onClose();
-      // Force navigation to dashboard
-      window.location.href = '/';
+      // Use React Router navigation instead of window.location
+      navigate('/', { replace: true });
     }
-  }, [user, isOpen, isSubmitting, onClose, reset]);
+  }, [user, isOpen, isSubmitting, onClose, reset, navigate]);
 
   // Reset form when modal opens
   useEffect(() => {
@@ -70,8 +72,8 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
     try {
       await login(data.email, data.password);
       // Don't close the modal here - let the useEffect handle it when user state changes
-    } catch (error: any) {
-      setErrorMsg(error.message || 'Erro ao autenticar');
+    } catch (error: unknown) {
+      setErrorMsg(error instanceof Error ? error.message : 'Erro ao autenticar');
     } finally {
       setIsSubmitting(false);
     }
@@ -218,8 +220,6 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
                         <p className="text-sm text-red-600 mt-1">{errors.password.message}</p>
                       )}
                     </div>
-
-             
 
                     <div className="flex space-x-3 pt-4">
                       <button

@@ -162,10 +162,8 @@ export const useAuth = () => {
       // User will be set by the onAuthStateChange listener
       toast.success('Login realizado com sucesso!');
       
-      // Force a small delay to ensure auth state is updated
-      setTimeout(() => {
-        setLoading(false);
-      }, 1000);
+      // Loading will be set to false by the auth state change listener
+      // No need for artificial delay
       
     } catch (err) {
       setLoading(false); // Set loading to false immediately on error
@@ -221,7 +219,7 @@ export const useAuth = () => {
     };
     
     let roleCount = 0;
-    Object.entries(roleDefiningPermissions).forEach(([perm, role]) => {
+    Object.entries(roleDefiningPermissions).forEach(([perm]) => {
       if (user.permissions[perm]) roleCount++;
     });
     
@@ -248,14 +246,14 @@ export const useAuth = () => {
     };
     
     // Check each role
-    Object.entries(rolePermissions).forEach(([role, permissions]) => {
+    Object.entries(rolePermissions).forEach(([roleName, permissions]) => {
       // Skip the primary role
-      if (role === user.role) return;
+      if (roleName === user.role) return;
       
       // Check if user has all permissions for this role
       const hasAllPermissions = permissions.every(p => user.permissions[p]);
       if (hasAllPermissions) {
-        roles.push(role);
+        roles.push(roleName);
       }
     });
     

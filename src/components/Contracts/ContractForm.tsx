@@ -1,18 +1,40 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '../UI/Button';
-import { Badge } from '../UI/Badge';
-import { Calendar, DollarSign, Car, User, Loader2, AlertTriangle, Gauge } from 'lucide-react';
-import { ResponsibleField } from '../UI/ResponsibleField';
+import { Calendar, DollarSign, Car, Loader2, Gauge } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
-import { supabase } from '../../lib/supabase';
+import { useVehicles } from '../../hooks/useVehicles';
+
+// Definir tipos explícitos para os dados do contrato, cliente e funcionário
+interface Customer {
+  id: string;
+  name: string;
+  document: string;
+}
+interface Employee {
+  id: string;
+  name: string;
+  role: string;
+  active: boolean;
+}
+interface ContractFormData {
+  customer_id: string;
+  vehicle_id: string;
+  start_date: string;
+  end_date: string;
+  daily_rate: number;
+  status: string;
+  salesperson_id: string;
+  km_limit?: number;
+  price_per_excess_km?: number;
+  price_per_liter?: number;
+}
 
 interface ContractFormProps {
-  onSubmit: (data: any) => Promise<void>;
+  onSubmit: (data: ContractFormData) => Promise<void>;
   onCancel: () => void;
-  contract?: any;
-  customers: any[];
-  employees: any[];
-  getAvailableVehicles: (startDate: string, endDate: string) => Promise<any[]>;
+  contract?: Partial<ContractFormData>;
+  customers: Customer[];
+  employees: Employee[];
   loading?: boolean;
 }
 
@@ -22,13 +44,11 @@ export const ContractForm: React.FC<ContractFormProps> = ({
   contract,
   customers,
   employees,
-  getAvailableVehicles,
   loading = false
 }) => {
   const { user, isAdmin, isManager, hasPermission } = useAuth();
-  const [availableVehicles, setAvailableVehicles] = useState<any[]>([]);
-  const [loadingVehicles, setLoadingVehicles] = useState(false);
-  const [formData, setFormData] = useState({
+  const { vehicles, loading: loadingAllVehicles } = useVehicles();
+  const [formData, setFormData] = useState<ContractFormData>({
     customer_id: contract?.customer_id || '',
     vehicle_id: contract?.vehicle_id || '',
     start_date: contract?.start_date || '',
@@ -40,7 +60,6 @@ export const ContractForm: React.FC<ContractFormProps> = ({
     price_per_excess_km: contract?.price_per_excess_km || 0,
     price_per_liter: contract?.price_per_liter || 0
   });
-  const [conflicts, setConflicts] = useState<any>(null);
 
   // Filter employees to only show Sales role or Admin/Manager
   const salespeople = employees.filter(emp => 
@@ -60,28 +79,12 @@ export const ContractForm: React.FC<ContractFormProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Validate dates
+    // Validações básicas (datas obrigatórias)
     if (new Date(formData.start_date) > new Date(formData.end_date)) {
       alert('A data de início não pode ser posterior à data de término.');
       return;
     }
-    
-    // Validate vehicle availability
-    if (!contract) {
-      setLoadingVehicles(true);
-      try {
-        const conflicts = await checkVehicleAvailability();
-        if (conflicts.has_conflict) {
-          setConflicts(conflicts);
-          return;
-        }
-      } finally {
-        setLoadingVehicles(false);
-      }
-    }
-    
-    await onSubmit(formData);
+    await onSubmit(formData); // Envie o formData puro, igual ao Contracts2.tsx
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -92,60 +95,12 @@ export const ContractForm: React.FC<ContractFormProps> = ({
         ? Number(value) || 0 
         : value
     }));
-    
-    // Clear conflicts when form changes
-    if (conflicts) {
-      setConflicts(null);
-    }
   };
 
   const handleDateChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     const newFormData = { ...formData, [name]: value };
     setFormData(newFormData);
-
-    // Clear conflicts
-    setConflicts(null);
-
-    // Se ambas as datas estão preenchidas, buscar veículos disponíveis
-    if (newFormData.start_date && newFormData.end_date && newFormData.start_date <= newFormData.end_date) {
-      setLoadingVehicles(true);
-      try {
-        const vehicles = await getAvailableVehicles(newFormData.start_date, newFormData.end_date);
-        setAvailableVehicles(vehicles);
-        
-        // Se o veículo atual não está disponível, limpar seleção
-        if (newFormData.vehicle_id && !vehicles.find(v => v.id === newFormData.vehicle_id)) {
-          setFormData(prev => ({ ...prev, vehicle_id: '' }));
-        }
-      } catch (error) {
-        console.error('Error fetching available vehicles:', error);
-      } finally {
-        setLoadingVehicles(false);
-      }
-    }
-  };
-
-  const checkVehicleAvailability = async () => {
-    if (!formData.vehicle_id || !formData.start_date || !formData.end_date) {
-      return { has_conflict: false, conflicting_contracts: [] };
-    }
-    
-    try {
-      // Call the API to check for conflicts
-      const { data, error } = await supabase.rpc('fn_check_contract_conflicts', {
-        p_vehicle_id: formData.vehicle_id,
-        p_start_date: formData.start_date,
-        p_end_date: formData.end_date,
-        p_contract_id: contract?.id || null
-      });
-      
-      if (error) throw error;
-      return data || { has_conflict: false, conflicting_contracts: [] };
-    } catch (error) {
-      console.error('Error checking vehicle availability:', error);
-      return { has_conflict: false, conflicting_contracts: [] };
-    }
   };
 
   const calculateDays = () => {
@@ -259,7 +214,7 @@ export const ContractForm: React.FC<ContractFormProps> = ({
 
         <div>
           <label className="block text-sm font-medium text-secondary-700 mb-2">
-            Veículo * {loadingVehicles && <span className="text-xs text-secondary-500">(Carregando...)</span>}
+            Veículo * {loadingAllVehicles && <span className="text-xs text-secondary-500">(Carregando...)</span>}
           </label>
           <div className="relative">
             <Car className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-secondary-400" />
@@ -269,26 +224,18 @@ export const ContractForm: React.FC<ContractFormProps> = ({
               onChange={handleChange}
               className="w-full pl-10 pr-4 py-2 border border-secondary-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
               required
-              disabled={loadingVehicles || !formData.start_date || !formData.end_date}
+              disabled={loadingAllVehicles}
             >
               <option value="">
-                {!formData.start_date || !formData.end_date 
-                  ? 'Selecione as datas primeiro' 
-                  : 'Selecione um veículo disponível'
-                }
+                {loadingAllVehicles ? 'Carregando veículos...' : 'Selecione um veículo da frota'}
               </option>
-              {availableVehicles.map(vehicle => (
+              {vehicles.map(vehicle => (
                 <option key={vehicle.id} value={vehicle.id}>
                   {vehicle.plate} - {vehicle.model} ({vehicle.year})
                 </option>
               ))}
             </select>
           </div>
-          {formData.start_date && formData.end_date && availableVehicles.length === 0 && !loadingVehicles && (
-            <p className="text-sm text-error-600 mt-1">
-              Nenhum veículo disponível no período selecionado
-            </p>
-          )}
         </div>
       </div>
 
@@ -371,29 +318,6 @@ export const ContractForm: React.FC<ContractFormProps> = ({
         </div>
       </div>
 
-      {/* Conflict Warning */}
-      {conflicts && conflicts.has_conflict && (
-        <div className="bg-error-50 border border-error-200 rounded-lg p-4">
-          <div className="flex items-start">
-            <AlertTriangle className="h-5 w-5 text-error-600 mr-2 mt-0.5" />
-            <div>
-              <p className="text-error-800 font-medium">Conflito de Agendamento Detectado</p>
-              <p className="text-error-700 text-sm mt-1">
-                Este veículo já está reservado para o período selecionado. Por favor, escolha outro veículo ou altere as datas.
-              </p>
-              <div className="mt-2 space-y-1">
-                {conflicts.conflicting_contracts.map((contract: any, index: number) => (
-                  <div key={index} className="text-sm text-error-700">
-                    • Cliente: {contract.customer_name} | 
-                    Período: {new Date(contract.start_date).toLocaleDateString('pt-BR')} a {new Date(contract.end_date).toLocaleDateString('pt-BR')}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Resumo do Contrato */}
       {formData.start_date && formData.end_date && formData.daily_rate > 0 && (
         <div className="bg-secondary-50 p-4 rounded-lg">
@@ -423,10 +347,10 @@ export const ContractForm: React.FC<ContractFormProps> = ({
         </Button>
         <Button 
           type="submit" 
-          disabled={loading || loadingVehicles || (conflicts && conflicts.has_conflict)} 
+          disabled={loadingAllVehicles} 
           className="w-full sm:w-auto"
         >
-          {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+          {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
           {contract ? 'Salvar Alterações' : 'Criar Contrato'}
         </Button>
       </div>

@@ -97,23 +97,30 @@ export default function AdminDashboard() {
     try {
       setDeletingUserId(userId);
       
+      const userToDelete = users.find(u => u.id === userId);
+      if (!userToDelete) {
+        toast.error('Usuário não encontrado');
+        return;
+      }
+      
       // Check if this is the last admin
       const adminUsers = users.filter(user => user.role === 'Admin' && user.active);
-      if (adminUsers.length <= 1 && users.find(u => u.id === userId)?.role === 'Admin') {
+      if (adminUsers.length <= 1 && userToDelete.role === 'Admin') {
         toast.error('Não é possível excluir o último administrador do sistema');
         return;
       }
       
-      // Delete the employee record
+      // Try to delete the employee record
       const { error } = await supabase
         .from('employees')
         .delete()
         .eq('id', userId);
       
       if (error) {
-        // If deletion fails, it might be due to foreign key constraints
-        if (error.code === '23503') {
-          // Instead of deleting, deactivate the user
+        console.error('Delete error:', error);
+        
+        // If deletion fails due to foreign key constraints, deactivate instead
+        if (error.code === '23503' || error.message?.includes('violates foreign key constraint')) {
           await toggleUserActive(userId, true);
           toast.success('Usuário desativado com sucesso (não foi possível excluir devido a referências no sistema)');
         } else {
@@ -121,12 +128,12 @@ export default function AdminDashboard() {
         }
       } else {
         // Remove from local state
-        setUsers(users.filter(user => user.id !== userId));
+        setUsers(prevUsers => prevUsers.filter(user => user.id !== userId));
         toast.success('Usuário excluído com sucesso');
       }
     } catch (error) {
       console.error('Error deleting user:', error);
-      toast.error('Erro ao excluir usuário');
+      toast.error('Erro ao excluir usuário: ' + (error instanceof Error ? error.message : 'Erro desconhecido'));
     } finally {
       setDeletingUserId(null);
     }

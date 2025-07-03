@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Button } from '../UI/Button';
 import { Badge } from '../UI/Badge';
-import { Search, Plus, Minus, ShoppingCart, X, Camera, AlertTriangle, Trash2, MapPin } from 'lucide-react';
+import { Plus, Trash2, Camera, DollarSign, Save, RotateCcw } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface DamageItem {
@@ -12,414 +12,311 @@ interface DamageItem {
   severity: 'Baixa' | 'Média' | 'Alta';
   photo_url?: string;
   requires_repair: boolean;
+  estimated_cost?: number;
 }
 
 interface DamageCartModalProps {
   isOpen: boolean;
   onClose: () => void;
-  damageCart: DamageItem[];
-  onUpdateCart: (cart: DamageItem[]) => void;
-  onSaveCart: (damages: Omit<DamageItem, 'id'>[]) => Promise<void>;
-  onUploadPhoto: (file: File) => Promise<string>;
+  onSave: (damages: DamageItem[]) => void;
+  existingDamages?: DamageItem[];
+  inspectionType: string;
+  contractId?: string;
 }
 
-const PREDEFINED_LOCATIONS = [
-  'Para-choque dianteiro',
-  'Para-choque traseiro',
-  'Porta dianteira esquerda',
-  'Porta dianteira direita',
-  'Porta traseira esquerda',
-  'Porta traseira direita',
-  'Capô',
-  'Teto',
-  'Porta-malas',
-  'Lateral esquerda',
-  'Lateral direita',
-  'Farol dianteiro esquerdo',
-  'Farol dianteiro direito',
-  'Farol traseiro esquerdo',
-  'Farol traseiro direito',
-  'Retrovisor esquerdo',
-  'Retrovisor direito',
-  'Para-brisa dianteiro',
-  'Para-brisa traseiro',
-  'Vidro lateral esquerdo',
-  'Vidro lateral direito',
-  'Roda dianteira esquerda',
-  'Roda dianteira direita',
-  'Roda traseira esquerda',
-  'Roda traseira direita',
-  'Estepe',
-  'Painel interno',
-  'Bancos',
-  'Volante',
-  'Outro'
-];
+const DAMAGE_TYPES = ['Arranhão', 'Amassado', 'Quebrado', 'Desgaste', 'Outro'];
+const SEVERITIES = ['Baixa', 'Média', 'Alta'];
 
 export const DamageCartModal: React.FC<DamageCartModalProps> = ({
   isOpen,
   onClose,
-  damageCart,
-  onUpdateCart,
-  onSaveCart,
-  onUploadPhoto
+  onSave,
+  existingDamages = [],
+  inspectionType,
+  contractId
 }) => {
-  const [loading, setLoading] = useState(false);
-  const [uploadingPhoto, setUploadingPhoto] = useState<string | null>(null);
-  const [newDamage, setNewDamage] = useState<Omit<DamageItem, 'id'>>({
-    location: '',
-    description: '',
-    damage_type: 'Arranhão',
-    severity: 'Baixa',
-    photo_url: '',
-    requires_repair: true
+  const [damages, setDamages] = useState<DamageItem[]>(() => {
+    // Inicializar com danos existentes ou uma linha vazia
+    if (existingDamages.length > 0) {
+      return [...existingDamages];
+    }
+    return [createEmptyDamage()];
   });
 
-  if (!isOpen) return null;
+  const tableRef = useRef<HTMLTableElement>(null);
 
-  const addDamageToCart = () => {
-    if (!newDamage.location || !newDamage.description) {
-      toast.error('Preencha o local e a descrição do dano');
-      return;
-    }
-
-    const damageWithId: DamageItem = {
-      ...newDamage,
-      id: Date.now().toString() + Math.random().toString()
-    };
-
-    onUpdateCart([...damageCart, damageWithId]);
-    toast.success('Dano adicionado ao carrinho');
-    
-    // Reset form
-    setNewDamage({
+  function createEmptyDamage(): DamageItem {
+    return {
+      id: `damage_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       location: '',
       description: '',
       damage_type: 'Arranhão',
       severity: 'Baixa',
-      photo_url: '',
-      requires_repair: true
-    });
+      requires_repair: false,
+      estimated_cost: 0
+    };
+  }
+
+  if (!isOpen) return null;
+
+  const addNewRow = () => {
+    setDamages(prev => [...prev, createEmptyDamage()]);
   };
 
-  const removeDamageFromCart = (damageId: string) => {
-    onUpdateCart(damageCart.filter(item => item.id !== damageId));
-    toast.success('Dano removido do carrinho');
+  const removeRow = (id: string) => {
+    if (damages.length === 1) {
+      // Se só tem uma linha, limpar ao invés de remover
+      setDamages([createEmptyDamage()]);
+    } else {
+      setDamages(prev => prev.filter(d => d.id !== id));
+    }
   };
 
-  const updateDamageInCart = (damageId: string, updates: Partial<DamageItem>) => {
-    onUpdateCart(damageCart.map(item => 
-      item.id === damageId ? { ...item, ...updates } : item
+  const updateDamage = (id: string, field: keyof DamageItem, value: any) => {
+    setDamages(prev => prev.map(damage => 
+      damage.id === id 
+        ? { ...damage, [field]: value }
+        : damage
     ));
   };
 
-  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>, damageId?: string) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleSave = () => {
+    // Filtrar apenas danos com localização e descrição preenchidas
+    const validDamages = damages.filter(d => 
+      d.location.trim() !== '' && d.description.trim() !== ''
+    );
 
-    const targetId = damageId || 'new';
-    setUploadingPhoto(targetId);
-    
-    try {
-      // Add timestamp to prevent caching
-      const timestamp = new Date().getTime();
-      const photoUrl = await onUploadPhoto(file);
-      
-      // Append timestamp to URL to prevent caching
-      const photoUrlWithTimestamp = `${photoUrl}?t=${timestamp}`;
-      
-      if (damageId) {
-        updateDamageInCart(damageId, { photo_url: photoUrlWithTimestamp });
-        toast.success('Foto do dano atualizada');
-      } else {
-        setNewDamage(prev => ({ ...prev, photo_url: photoUrlWithTimestamp }));
-        toast.success('Foto do dano adicionada');
-      }
-    } catch (error) {
-      console.error('Error uploading photo:', error);
-      toast.error('Erro ao fazer upload da foto');
-    } finally {
-      setUploadingPhoto(null);
-    }
-  };
-
-  const handleSaveCart = async () => {
-    if (damageCart.length === 0) {
-      toast.error('Adicione pelo menos um dano antes de finalizar');
+    if (validDamages.length === 0) {
+      toast.error('Adicione pelo menos um dano com localização e descrição preenchidas');
       return;
     }
-    
-    setLoading(true);
-    try {
-      const damagesWithoutId = damageCart.map(({ id, ...damage }) => damage);
-      await onSaveCart(damagesWithoutId);
-      toast.success('Danos adicionados com sucesso');
-      onClose();
-    } catch (error) {
-      console.error('Error saving damage cart:', error);
-      toast.error('Erro ao salvar danos. Tente novamente.');
-    } finally {
-      setLoading(false);
-    }
+
+    onSave(validDamages);
+    toast.success(`${validDamages.length} dano(s) registrado(s) com sucesso!`);
+    onClose();
   };
 
-  const getSeverityBadge = (severity: string) => {
-    const variants = {
-      'Baixa': 'secondary',
-      'Média': 'warning',
-      'Alta': 'error'
-    } as const;
-
-    return <Badge variant={variants[severity as keyof typeof variants] || 'secondary'}>{severity}</Badge>;
+  const clearAll = () => {
+    setDamages([createEmptyDamage()]);
+    toast.success('Lista de danos limpa');
   };
 
-  const getDamageTypeBadge = (damageType: string) => {
-    return <Badge variant="info">{damageType}</Badge>;
+  const getSeverityColor = (severity: string) => {
+    const colors = {
+      'Baixa': 'bg-green-100 text-green-800',
+      'Média': 'bg-yellow-100 text-yellow-800',
+      'Alta': 'bg-red-100 text-red-800'
+    };
+    return colors[severity as keyof typeof colors] || 'bg-gray-100 text-gray-800';
   };
 
-  const totalDamages = damageCart.length;
-  const highSeverityCount = damageCart.filter(d => d.severity === 'Alta').length;
+  const getTotalEstimatedCost = () => {
+    return damages.reduce((sum, damage) => sum + (damage.estimated_cost || 0), 0);
+  };
+
+  const validDamagesCount = damages.filter(d => 
+    d.location.trim() !== '' && d.description.trim() !== ''
+  ).length;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg w-full max-w-6xl max-h-[95vh] overflow-hidden flex flex-col lg:flex-row">
-        {/* Left Panel - Add New Damage */}
-        <div className="flex-1 p-4 lg:p-6 border-b lg:border-b-0 lg:border-r border-secondary-200">
-          <div className="flex justify-between items-center mb-4 lg:mb-6">
+      <div className="bg-white rounded-lg p-4 lg:p-6 w-full max-w-7xl max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center mb-4 lg:mb-6">
+          <div>
             <h2 className="text-lg lg:text-xl font-semibold text-secondary-900 flex items-center">
               <Camera className="h-5 w-5 mr-2" />
-              Registrar Novo Dano
+              Registrar Danos - {inspectionType}
             </h2>
-            <button onClick={onClose} className="text-secondary-400 hover:text-secondary-600 lg:hidden">
-              <X className="h-6 w-6" />
-            </button>
+            <p className="text-sm text-secondary-600 mt-1">
+              Interface tipo Excel - Edite diretamente nas células
+            </p>
+          </div>
+          <button onClick={onClose} className="text-secondary-400 hover:text-secondary-600 p-2">
+            ×
+          </button>
+        </div>
+
+        {/* Estatísticas */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+          <div className="bg-primary-50 p-4 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-primary-600 font-medium">Danos Válidos</p>
+                <p className="text-2xl font-bold text-primary-700">{validDamagesCount}</p>
+              </div>
+              <Camera className="h-8 w-8 text-primary-600" />
+            </div>
+          </div>
+          
+          <div className="bg-warning-50 p-4 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-warning-600 font-medium">Custo Total Estimado</p>
+                <p className="text-2xl font-bold text-warning-700">
+                  R$ {getTotalEstimatedCost().toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </p>
+              </div>
+              <DollarSign className="h-8 w-8 text-warning-600" />
+            </div>
           </div>
 
-          {/* New Damage Form */}
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-secondary-700 mb-2">
-                <MapPin className="h-4 w-4 inline mr-1" />
-                Local do Dano *
-              </label>
-              <select
-                value={newDamage.location}
-                onChange={(e) => setNewDamage(prev => ({ ...prev, location: e.target.value }))}
-                className="w-full border border-secondary-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
-              >
-                <option value="">Selecione o local do dano</option>
-                {PREDEFINED_LOCATIONS.map((location) => (
-                  <option key={location} value={location}>
-                    {location}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="bg-secondary-50 p-4 rounded-lg">
+            <div className="flex items-center justify-between">
               <div>
-                <label className="block text-sm font-medium text-secondary-700 mb-2">
-                  Tipo de Dano *
-                </label>
-                <select
-                  value={newDamage.damage_type}
-                  onChange={(e) => setNewDamage(prev => ({ ...prev, damage_type: e.target.value as any }))}
-                  className="w-full border border-secondary-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                >
-                  <option value="Arranhão">Arranhão</option>
-                  <option value="Amassado">Amassado</option>
-                  <option value="Quebrado">Quebrado</option>
-                  <option value="Desgaste">Desgaste</option>
-                  <option value="Outro">Outro</option>
-                </select>
+                <p className="text-sm text-secondary-600 font-medium">Linhas na Tabela</p>
+                <p className="text-2xl font-bold text-secondary-700">{damages.length}</p>
               </div>
-
-              <div>
-                <label className="block text-sm font-medium text-secondary-700 mb-2">
-                  Severidade *
-                </label>
-                <select
-                  value={newDamage.severity}
-                  onChange={(e) => setNewDamage(prev => ({ ...prev, severity: e.target.value as any }))}
-                  className="w-full border border-secondary-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                >
-                  <option value="Baixa">Baixa</option>
-                  <option value="Média">Média</option>
-                  <option value="Alta">Alta</option>
-                </select>
-              </div>
+              <Plus className="h-8 w-8 text-secondary-600" />
             </div>
-
-            <div>
-              <label className="block text-sm font-medium text-secondary-700 mb-2">
-                Descrição Detalhada *
-              </label>
-              <textarea
-                value={newDamage.description}
-                onChange={(e) => setNewDamage(prev => ({ ...prev, description: e.target.value }))}
-                rows={3}
-                className="w-full border border-secondary-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                placeholder="Descreva detalhadamente o dano encontrado, incluindo tamanho, profundidade, extensão..."
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-secondary-700 mb-2">
-                Foto do Dano
-              </label>
-              <div className="space-y-2">
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => handlePhotoUpload(e)}
-                  className="w-full border border-secondary-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  disabled={uploadingPhoto === 'new'}
-                />
-                {uploadingPhoto === 'new' && (
-                  <p className="text-sm text-secondary-600">Fazendo upload da foto...</p>
-                )}
-                {newDamage.photo_url && (
-                  <div className="mt-2">
-                    <img 
-                      src={newDamage.photo_url} 
-                      alt="Foto do dano" 
-                      className="w-full h-32 object-cover rounded-lg border"
-                      crossOrigin="anonymous"
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                checked={newDamage.requires_repair}
-                onChange={(e) => setNewDamage(prev => ({ ...prev, requires_repair: e.target.checked }))}
-                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-secondary-300 rounded"
-              />
-              <label className="ml-2 block text-sm text-secondary-700">
-                Requer reparo
-              </label>
-            </div>
-
-            <Button
-              onClick={addDamageToCart}
-              disabled={!newDamage.location || !newDamage.description}
-              className="w-full"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Adicionar ao Carrinho
-            </Button>
           </div>
         </div>
 
-        {/* Right Panel - Damage Cart */}
-        <div className="w-full lg:w-96 p-4 lg:p-6 bg-secondary-50">
-          <div className="flex items-center justify-between mb-4 lg:mb-6">
-            <h3 className="text-lg font-semibold text-secondary-900 flex items-center">
-              <ShoppingCart className="h-5 w-5 mr-2" />
-              Carrinho ({totalDamages})
-            </h3>
-            <div className="flex items-center space-x-2">
-              {damageCart.length > 0 && (
-                <button
-                  onClick={() => onUpdateCart([])}
-                  className="text-sm text-error-600 hover:text-error-800"
-                >
-                  Limpar
-                </button>
-              )}
-              <button onClick={onClose} className="text-secondary-400 hover:text-secondary-600 hidden lg:block">
-                <X className="h-6 w-6" />
-              </button>
-            </div>
-          </div>
+        {/* Controles */}
+        <div className="flex flex-wrap gap-2 mb-4">
+          <Button onClick={addNewRow} variant="secondary" size="sm">
+            <Plus className="h-4 w-4 mr-2" />
+            Nova Linha
+          </Button>
+          <Button onClick={clearAll} variant="secondary" size="sm">
+            <RotateCcw className="h-4 w-4 mr-2" />
+            Limpar Tudo
+          </Button>
+        </div>
 
-          {damageCart.length === 0 ? (
-            <div className="text-center py-8">
-              <ShoppingCart className="h-12 w-12 text-secondary-400 mx-auto mb-4" />
-              <p className="text-secondary-600">Carrinho vazio</p>
-              <p className="text-sm text-secondary-500 mt-1">
-                Adicione danos encontrados na inspeção
-              </p>
-            </div>
-          ) : (
-            <>
-              {/* Cart Summary */}
-              <div className="bg-white p-4 rounded-lg border border-secondary-200 mb-4">
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="text-secondary-600">Total de Danos:</span>
-                    <p className="font-medium text-lg">{totalDamages}</p>
-                  </div>
-                  <div>
-                    <span className="text-secondary-600">Alta Severidade:</span>
-                    <p className="font-medium text-lg text-error-600">{highSeverityCount}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Cart Items */}
-              <div className="space-y-3 mb-6 max-h-64 lg:max-h-80 overflow-y-auto">
-                {damageCart.map((damage) => (
-                  <div key={damage.id} className="bg-white p-3 rounded-lg border border-secondary-200">
-                    <div className="flex justify-between items-start mb-2">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex flex-wrap items-center gap-2 mb-1">
-                          <h4 className="font-medium text-secondary-900 text-sm truncate">{damage.location}</h4>
-                          {getDamageTypeBadge(damage.damage_type)}
-                          {getSeverityBadge(damage.severity)}
-                        </div>
-                        <p className="text-xs text-secondary-600 line-clamp-2">{damage.description}</p>
-                      </div>
+        {/* Tabela Tipo Excel */}
+        <div className="border border-secondary-200 rounded-lg overflow-hidden mb-6">
+          <div className="overflow-x-auto">
+            <table ref={tableRef} className="w-full">
+              <thead className="bg-secondary-50">
+                <tr>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-secondary-600 border-r border-secondary-200">
+                    #
+                  </th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-secondary-600 border-r border-secondary-200 min-w-[200px]">
+                    Localização *
+                  </th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-secondary-600 border-r border-secondary-200 min-w-[300px]">
+                    Descrição do Dano *
+                  </th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-secondary-600 border-r border-secondary-200 min-w-[120px]">
+                    Tipo
+                  </th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-secondary-600 border-r border-secondary-200 min-w-[100px]">
+                    Severidade
+                  </th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-secondary-600 border-r border-secondary-200 min-w-[120px]">
+                    Custo Est. (R$)
+                  </th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-secondary-600 border-r border-secondary-200 min-w-[100px]">
+                    Requer Reparo
+                  </th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-secondary-600 min-w-[80px]">
+                    Ações
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {damages.map((damage, index) => (
+                  <tr key={damage.id} className="border-t border-secondary-200 hover:bg-secondary-25">
+                    <td className="py-2 px-4 text-sm text-secondary-600 border-r border-secondary-200">
+                      {index + 1}
+                    </td>
+                    <td className="py-2 px-2 border-r border-secondary-200">
+                      <input
+                        type="text"
+                        value={damage.location}
+                        onChange={(e) => updateDamage(damage.id, 'location', e.target.value)}
+                        className="w-full border-0 bg-transparent focus:outline-none focus:ring-2 focus:ring-primary-500 rounded px-2 py-1"
+                        placeholder="Ex: Porta dianteira esquerda"
+                      />
+                    </td>
+                    <td className="py-2 px-2 border-r border-secondary-200">
+                      <textarea
+                        value={damage.description}
+                        onChange={(e) => updateDamage(damage.id, 'description', e.target.value)}
+                        rows={2}
+                        className="w-full border-0 bg-transparent focus:outline-none focus:ring-2 focus:ring-primary-500 rounded px-2 py-1 resize-none"
+                        placeholder="Descreva o dano detalhadamente..."
+                      />
+                    </td>
+                    <td className="py-2 px-2 border-r border-secondary-200">
+                      <select
+                        value={damage.damage_type}
+                        onChange={(e) => updateDamage(damage.id, 'damage_type', e.target.value)}
+                        className="w-full border-0 bg-transparent focus:outline-none focus:ring-2 focus:ring-primary-500 rounded px-2 py-1"
+                      >
+                        {DAMAGE_TYPES.map(type => (
+                          <option key={type} value={type}>{type}</option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="py-2 px-2 border-r border-secondary-200">
+                      <select
+                        value={damage.severity}
+                        onChange={(e) => updateDamage(damage.id, 'severity', e.target.value)}
+                        className={`w-full border-0 bg-transparent focus:outline-none focus:ring-2 focus:ring-primary-500 rounded px-2 py-1 ${getSeverityColor(damage.severity)}`}
+                      >
+                        {SEVERITIES.map(severity => (
+                          <option key={severity} value={severity}>{severity}</option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="py-2 px-2 border-r border-secondary-200">
+                      <input
+                        type="number"
+                        value={damage.estimated_cost || 0}
+                        onChange={(e) => updateDamage(damage.id, 'estimated_cost', Number(e.target.value) || 0)}
+                        className="w-full border-0 bg-transparent focus:outline-none focus:ring-2 focus:ring-primary-500 rounded px-2 py-1"
+                        step="0.01"
+                        min="0"
+                        placeholder="0,00"
+                      />
+                    </td>
+                    <td className="py-2 px-4 border-r border-secondary-200 text-center">
+                      <input
+                        type="checkbox"
+                        checked={damage.requires_repair}
+                        onChange={(e) => updateDamage(damage.id, 'requires_repair', e.target.checked)}
+                        className="w-4 h-4 text-primary-600 focus:ring-primary-500 border-secondary-300 rounded"
+                      />
+                    </td>
+                    <td className="py-2 px-2 text-center">
                       <button
-                        onClick={() => removeDamageFromCart(damage.id)}
-                        className="text-error-600 hover:text-error-800 flex-shrink-0 ml-2"
+                        onClick={() => removeRow(damage.id)}
+                        className="p-1 text-error-400 hover:text-error-600 hover:bg-error-50 rounded"
+                        title="Remover linha"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
-                    </div>
-                    
-                    {damage.photo_url && (
-                      <div className="mt-2">
-                        <img 
-                          src={damage.photo_url} 
-                          alt="Foto do dano" 
-                          className="w-full h-20 object-cover rounded border"
-                          crossOrigin="anonymous"
-                        />
-                      </div>
-                    )}
-
-                    {!damage.requires_repair && (
-                      <div className="mt-2">
-                        <Badge variant="secondary" className="text-xs">Não requer reparo</Badge>
-                      </div>
-                    )}
-                  </div>
+                    </td>
+                  </tr>
                 ))}
-              </div>
+              </tbody>
+            </table>
+          </div>
+        </div>
 
-              {/* Action Buttons */}
-              <div className="space-y-3">
-                <Button
-                  onClick={handleSaveCart}
-                  disabled={loading}
-                  className="w-full"
-                >
-                  {loading ? 'Processando...' : 'Adicionar Danos à Inspeção'}
-                </Button>
-                <Button
-                  variant="secondary"
-                  onClick={onClose}
-                  className="w-full"
-                >
-                  Cancelar
-                </Button>
-              </div>
-            </>
-          )}
+        {/* Instruções */}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+          <h4 className="font-semibold text-blue-900 mb-2">💡 Como usar:</h4>
+          <ul className="text-sm text-blue-800 space-y-1">
+            <li>• Clique diretamente nas células para editar</li>
+            <li>• Use Tab para navegar entre células</li>
+            <li>• Preencha pelo menos Localização e Descrição para cada dano</li>
+            <li>• Clique em "Nova Linha" para adicionar mais danos</li>
+            <li>• O custo total será calculado automaticamente</li>
+          </ul>
+        </div>
+
+        {/* Botões de ação */}
+        <div className="flex justify-end space-x-4">
+          <Button variant="secondary" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button onClick={handleSave} disabled={validDamagesCount === 0}>
+            <Save className="h-4 w-4 mr-2" />
+            Salvar {validDamagesCount > 0 && `(${validDamagesCount} danos)`}
+          </Button>
         </div>
       </div>
     </div>

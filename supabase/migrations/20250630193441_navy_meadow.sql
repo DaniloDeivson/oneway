@@ -41,7 +41,7 @@ END $$;
 CREATE INDEX IF NOT EXISTS idx_fines_contract_id ON fines(contract_id);
 CREATE INDEX IF NOT EXISTS idx_fines_customer_id ON fines(customer_id);
 
--- Update the function that creates costs from fines
+-- Update the function that creates costs from fines with better error handling
 CREATE OR REPLACE FUNCTION fn_fine_postprocess()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -50,10 +50,19 @@ DECLARE
   v_employee_name text;
   v_customer_name text;
 BEGIN
-  -- Get driver name if available
-  SELECT name INTO v_driver_name
-  FROM drivers
-  WHERE id = NEW.driver_id;
+  -- Get driver name if available (check drivers table first, then employees)
+  IF NEW.driver_id IS NOT NULL THEN
+    SELECT name INTO v_driver_name
+    FROM drivers
+    WHERE id = NEW.driver_id;
+    
+    -- If not found in drivers, try employees table
+    IF v_driver_name IS NULL THEN
+      SELECT name INTO v_driver_name
+      FROM employees
+      WHERE id = NEW.driver_id;
+    END IF;
+  END IF;
   
   -- Get vehicle plate
   SELECT plate INTO v_vehicle_plate
@@ -61,9 +70,11 @@ BEGIN
   WHERE id = NEW.vehicle_id;
   
   -- Get employee name
-  SELECT name INTO v_employee_name
-  FROM employees
-  WHERE id = NEW.employee_id;
+  IF NEW.employee_id IS NOT NULL THEN
+    SELECT name INTO v_employee_name
+    FROM employees
+    WHERE id = NEW.employee_id;
+  END IF;
   
   -- Get customer name if not provided
   IF NEW.customer_id IS NOT NULL AND (NEW.customer_name IS NULL OR NEW.customer_name = '') THEN
@@ -74,51 +85,57 @@ BEGIN
     v_customer_name := NEW.customer_name;
   END IF;
   
-  -- Create cost entry for the fine
-  INSERT INTO costs (
-    tenant_id,
-    category,
-    vehicle_id,
-    description,
-    amount,
-    cost_date,
-    status,
-    document_ref,
-    observations,
-    origin,
-    created_by_employee_id,
-    source_reference_id,
-    source_reference_type,
-    department,
-    customer_id,
-    customer_name,
-    contract_id
-  ) VALUES (
-    NEW.tenant_id,
-    'Multa',
-    NEW.vehicle_id,
-    CONCAT('Multa ', NEW.fine_number, ' - ', NEW.infraction_type, 
-           CASE WHEN v_customer_name IS NOT NULL THEN ' — Cliente: ' || v_customer_name ELSE '' END),
-    NEW.amount,
-    NEW.infraction_date,
-    'Pendente',
-    NEW.document_ref,
-    CONCAT(
-      'Multa registrada por: ', COALESCE(v_employee_name, 'Sistema'), 
-      ' | Motorista: ', COALESCE(v_driver_name, 'Não informado'), 
-      ' | Veículo: ', COALESCE(v_vehicle_plate, 'N/A'),
-      ' | Vencimento: ', NEW.due_date,
-      CASE WHEN NEW.observations IS NOT NULL THEN ' | Obs: ' || NEW.observations ELSE '' END
-    ),
-    'Sistema',
-    NEW.employee_id,
-    NEW.id,
-    'fine',
-    CASE WHEN NEW.customer_id IS NOT NULL THEN 'Cobrança' ELSE NULL END,
-    NEW.customer_id,
-    v_customer_name,
-    NEW.contract_id
-  );
+  -- Create cost entry for the fine with proper error handling
+  BEGIN
+    INSERT INTO costs (
+      tenant_id,
+      category,
+      vehicle_id,
+      description,
+      amount,
+      cost_date,
+      status,
+      document_ref,
+      observations,
+      origin,
+      created_by_employee_id,
+      source_reference_id,
+      source_reference_type,
+      department,
+      customer_id,
+      customer_name,
+      contract_id
+    ) VALUES (
+      NEW.tenant_id,
+      'Multa',
+      NEW.vehicle_id,
+      CONCAT('Multa ', COALESCE(NEW.fine_number, 'SEM-NUMERO'), ' - ', NEW.infraction_type, 
+             CASE WHEN v_customer_name IS NOT NULL THEN ' — Cliente: ' || v_customer_name ELSE '' END),
+      NEW.amount,
+      NEW.infraction_date,
+      'Pendente',
+      NEW.document_ref,
+      CONCAT(
+        'Multa registrada por: ', COALESCE(v_employee_name, 'Sistema'), 
+        ' | Motorista: ', COALESCE(v_driver_name, 'Não informado'), 
+        ' | Veículo: ', COALESCE(v_vehicle_plate, 'N/A'),
+        ' | Vencimento: ', COALESCE(NEW.due_date::text, 'N/A'),
+        CASE WHEN NEW.observations IS NOT NULL THEN ' | Obs: ' || NEW.observations ELSE '' END
+      ),
+      'Sistema',
+      NEW.employee_id,
+      NEW.id,
+      'fine',
+      CASE WHEN NEW.customer_id IS NOT NULL THEN 'Cobrança' ELSE NULL END,
+      NEW.customer_id,
+      v_customer_name,
+      NEW.contract_id
+    );
+  EXCEPTION
+    WHEN OTHERS THEN
+      -- Log error but don't fail the fine creation
+      RAISE WARNING 'Erro ao criar custo automático para multa %: %', NEW.id, SQLERRM;
+  END;
   
   RETURN NEW;
 END;

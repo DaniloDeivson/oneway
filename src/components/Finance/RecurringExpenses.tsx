@@ -5,6 +5,7 @@ import { Button } from '../UI/Button';
 import { Plus, Search, Filter, Calendar, DollarSign, Repeat, Edit, Trash2, Loader2 } from 'lucide-react';
 import { RecurringExpense } from '../../hooks/useFinance';
 import toast from 'react-hot-toast';
+import { useFinance } from '../../hooks/useFinance';
 
 interface RecurringExpensesProps {
   recurringExpenses: RecurringExpense[];
@@ -20,6 +21,8 @@ export const RecurringExpenses: React.FC<RecurringExpensesProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const { deleteRecurringExpense } = useFinance();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Get unique categories for filter
   const categories = [...new Set(recurringExpenses.map(item => item.category))];
@@ -46,6 +49,20 @@ export const RecurringExpenses: React.FC<RecurringExpensesProps> = ({
       toast.error('Erro ao gerar despesas recorrentes');
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  // Nova função para deletar despesa recorrente
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('Tem certeza que deseja excluir esta despesa recorrente?')) return;
+    setDeletingId(id);
+    try {
+      await deleteRecurringExpense(id);
+      toast.success('Despesa recorrente excluída com sucesso!');
+    } catch (error) {
+      toast.error('Erro ao excluir despesa recorrente');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -164,10 +181,11 @@ export const RecurringExpenses: React.FC<RecurringExpensesProps> = ({
                       <Edit className="h-4 w-4" />
                     </button>
                     <button
-                      onClick={() => toast.success('Funcionalidade em desenvolvimento')}
+                      onClick={() => handleDelete(expense.id)}
+                      disabled={deletingId === expense.id}
                       className="text-error-600 hover:text-error-900"
                     >
-                      <Trash2 className="h-4 w-4" />
+                      {deletingId === expense.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                     </button>
                   </td>
                 </tr>

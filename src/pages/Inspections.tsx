@@ -81,34 +81,36 @@ const InspectionModal: React.FC<{
   };
 
   const handleSaveDamageCart = async (damages: Omit<DamageItem, 'id'>[]) => {
-    // Para nova inspeção, adicionar ao carrinho local (sem duplicar)
-    // Para inspeção existente, salvar diretamente
+    console.log('handleSaveDamageCart called with:', damages);
+    
     if (inspection) {
-      // Salvar danos diretamente na inspeção existente
-      for (const damage of damages) {
-        // Aqui você pode chamar addInspectionItem se necessário
-        console.log('Adding damage to existing inspection:', damage);
+      // Para inspeção existente, salvar danos diretamente
+      try {
+        for (const damage of damages) {
+          await addInspectionItem(inspection.id, damage);
+        }
+        toast.success(`${damages.length} danos adicionados à inspeção!`);
+      } catch (error) {
+        console.error('Error adding damages to existing inspection:', error);
+        toast.error('Erro ao adicionar danos à inspeção');
       }
     } else {
-      // Adicionar ao carrinho local para nova inspeção
+      // Para nova inspeção, adicionar ao carrinho local
       const damagesWithId = damages.map(damage => ({
         ...damage,
         id: Date.now().toString() + Math.random().toString()
       }));
       
-      // Use functional update to prevent duplicates
+      console.log('Adding to cart:', damagesWithId);
+      
+      // Atualizar o carrinho com novos danos
       setDamageCart(prev => {
-        // Check for duplicates based on location and description
-        const newDamages = damagesWithId.filter(newDamage => 
-          !prev.some(existingDamage => 
-            existingDamage.location === newDamage.location && 
-            existingDamage.description === newDamage.description
-          )
-        );
-        return [...prev, ...newDamages];
+        const updated = [...prev, ...damagesWithId];
+        console.log('Updated damage cart:', updated);
+        return updated;
       });
       
-      toast.success(`${damagesWithId.length} danos adicionados ao carrinho`);
+      toast.success(`${damagesWithId.length} danos adicionados ao carrinho!`);
     }
   };
 
@@ -132,6 +134,7 @@ const InspectionModal: React.FC<{
           employees={employees}
           onOpenDamageCart={() => setIsDamageCartOpen(true)}
           damageCount={damageCart.length}
+          damageCart={damageCart}
         />
 
         <DamageCartModal
@@ -161,6 +164,8 @@ export const Inspections: React.FC = () => {
   const [processingNotifications, setProcessingNotifications] = useState(false);
   const [damageItems, setDamageItems] = useState<DamageItem[]>([]);
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [selectedViewInspection, setSelectedViewInspection] = useState<any>(null);
 
   const canManageInspections = isAdmin || isManager || hasPermission('inspections');
 
@@ -241,6 +246,10 @@ export const Inspections: React.FC = () => {
           for (const damage of damages) {
             await addInspectionItem(newInspection.id, damage);
           }
+          
+          // Criar automaticamente custos e cobranças para os danos
+          await createDamageCostsAndCharges(newInspection, damages, data);
+          
           toast.success(`Inspeção criada com ${damages.length} danos registrados!`);
         } else {
           toast.success('Inspeção criada com sucesso!');
@@ -250,6 +259,41 @@ export const Inspections: React.FC = () => {
       console.error('Error saving inspection:', error);
       toast.error('Erro ao salvar inspeção');
       throw error;
+    }
+  };
+
+  // Função para criar automaticamente custos e cobranças para danos
+  const createDamageCostsAndCharges = async (inspection: any, damages: any[], inspectionData: any) => {
+    try {
+      const { createCost } = await import('../hooks/useCosts');
+      
+      for (const damage of damages) {
+        // Criar custo para cada dano
+        const costData = {
+          description: `Dano detectado - ${damage.location}: ${damage.description}`,
+          amount: 0, // Valor a definir
+          category: 'Avulsa',
+          origin: 'Inspeção',
+          vehicle_id: inspection.vehicle_id,
+          responsible: inspection.inspected_by,
+          status: 'Pendente',
+          notes: `Severidade: ${damage.severity} | Tipo: ${damage.damage_type} | Requer reparo: ${damage.requires_repair ? 'Sim' : 'Não'}`
+        };
+        
+        await createCost(costData);
+        
+        // Se há contrato ativo, criar cobrança para o cliente
+        if (inspectionData.contract_id) {
+          // Aqui você pode implementar a criação de cobrança
+          console.log('Criando cobrança para cliente do contrato:', inspectionData.contract_id);
+          // Implementar lógica de cobrança quando necessário
+        }
+      }
+      
+      console.log(`Criados ${damages.length} custos automáticos para danos detectados`);
+    } catch (error) {
+      console.error('Erro ao criar custos automáticos:', error);
+      toast.error('Erro ao criar custos automáticos para danos');
     }
   };
 
@@ -281,6 +325,12 @@ export const Inspections: React.FC = () => {
         <span className="text-primary-600 text-sm font-medium">Contrato vinculado</span>
       </div>
     );
+  };
+
+  // Adicionar função para visualizar inspeção
+  const handleView = (inspection: any) => {
+    setSelectedViewInspection(inspection);
+    setIsViewModalOpen(true);
   };
 
   if (loading) {
@@ -476,7 +526,10 @@ export const Inspections: React.FC = () => {
                     </div>
                   </div>
                   <div className="flex justify-end mt-3 space-x-2">
-                    <button className="p-2 text-secondary-400 hover:text-secondary-600">
+                    <button 
+                      onClick={() => handleView(inspection)}
+                      className="p-2 text-secondary-400 hover:text-secondary-600"
+                    >
                       <Eye className="h-4 w-4" />
                     </button>
                     {canManageInspections && (
@@ -575,7 +628,10 @@ export const Inspections: React.FC = () => {
                       </td>
                       <td className="py-4 px-6">
                         <div className="flex items-center space-x-2">
-                          <button className="p-1 text-secondary-400 hover:text-secondary-600">
+                          <button 
+                            onClick={() => handleView(inspection)}
+                            className="p-1 text-secondary-400 hover:text-secondary-600"
+                          >
                             <Eye className="h-4 w-4" />
                           </button>
                           {canManageInspections && (
@@ -656,6 +712,170 @@ export const Inspections: React.FC = () => {
         onSave={handleSave}
         onUploadSignature={uploadSignature}
       />
+
+      {/* View Inspection Modal */}
+      {isViewModalOpen && selectedViewInspection && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-semibold text-secondary-900">
+                Detalhes da Inspeção
+              </h3>
+              <button 
+                onClick={() => setIsViewModalOpen(false)}
+                className="text-secondary-400 hover:text-secondary-600 p-2"
+              >
+                ×
+              </button>
+            </div>
+            
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Informações Gerais */}
+              <div className="space-y-4">
+                <div className="bg-secondary-50 p-4 rounded-lg">
+                  <h4 className="font-semibold text-secondary-900 mb-3">Informações Gerais</h4>
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-secondary-600">Data/Hora:</span>
+                      <span className="font-medium">
+                        {new Date(selectedViewInspection.inspected_at).toLocaleString('pt-BR')}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-secondary-600">Tipo:</span>
+                      <span className="font-medium">{selectedViewInspection.inspection_type}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-secondary-600">Inspetor:</span>
+                      <span className="font-medium">
+                        {getInspectorName(selectedViewInspection.employee_id, selectedViewInspection)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Informações do Veículo */}
+                <div className="bg-secondary-50 p-4 rounded-lg">
+                  <h4 className="font-semibold text-secondary-900 mb-3">Veículo</h4>
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-secondary-600">Placa:</span>
+                      <span className="font-medium">{selectedViewInspection.vehicles?.plate}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-secondary-600">Modelo:</span>
+                      <span className="font-medium">
+                        {selectedViewInspection.vehicles?.model} ({selectedViewInspection.vehicles?.year})
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Métricas */}
+                <div className="bg-secondary-50 p-4 rounded-lg">
+                  <h4 className="font-semibold text-secondary-900 mb-3">Métricas</h4>
+                  <div className="space-y-2">
+                    {selectedViewInspection.mileage && (
+                      <div className="flex justify-between">
+                        <span className="text-secondary-600">Quilometragem:</span>
+                        <span className="font-medium">{selectedViewInspection.mileage} km</span>
+                      </div>
+                    )}
+                    {selectedViewInspection.fuel_level && (
+                      <div className="flex justify-between">
+                        <span className="text-secondary-600">Combustível:</span>
+                        <span className="font-medium">{Math.round(selectedViewInspection.fuel_level * 100)}%</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Danos e Observações */}
+              <div className="space-y-4">
+                {/* Danos */}
+                <div className="bg-secondary-50 p-4 rounded-lg">
+                  <h4 className="font-semibold text-secondary-900 mb-3">
+                    Danos Identificados ({selectedViewInspection.inspection_items?.length || 0})
+                  </h4>
+                  {selectedViewInspection.inspection_items?.length > 0 ? (
+                    <div className="space-y-3">
+                      {selectedViewInspection.inspection_items.map((item: any, index: number) => (
+                        <div key={index} className="bg-white p-3 rounded border-l-4 border-warning-500">
+                          <div className="flex justify-between items-start mb-2">
+                            <span className="font-medium text-secondary-900">{item.location}</span>
+                            <Badge variant="warning" className="text-xs">
+                              {item.damage_type}
+                            </Badge>
+                          </div>
+                          <p className="text-sm text-secondary-600 mb-2">{item.description}</p>
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs text-secondary-500">
+                              Severidade: {item.severity}
+                            </span>
+                            {item.requires_repair && (
+                              <Badge variant="error" className="text-xs">
+                                Requer Reparo
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-secondary-600 text-center py-4">
+                      Nenhum dano identificado nesta inspeção
+                    </p>
+                  )}
+                </div>
+
+                {/* Observações */}
+                {selectedViewInspection.observations && (
+                  <div className="bg-secondary-50 p-4 rounded-lg">
+                    <h4 className="font-semibold text-secondary-900 mb-3">Observações</h4>
+                    <p className="text-secondary-700 whitespace-pre-wrap">
+                      {selectedViewInspection.observations}
+                    </p>
+                  </div>
+                )}
+
+                {/* Contrato */}
+                {selectedViewInspection.contract_id && (
+                  <div className="bg-secondary-50 p-4 rounded-lg">
+                    <h4 className="font-semibold text-secondary-900 mb-3">Contrato</h4>
+                    <div className="flex justify-between">
+                      <span className="text-secondary-600">ID do Contrato:</span>
+                      <Badge variant="primary">
+                        #{selectedViewInspection.contract_id.substring(0, 8)}
+                      </Badge>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            <div className="flex justify-end mt-6 space-x-4">
+              <Button 
+                variant="secondary" 
+                onClick={() => setIsViewModalOpen(false)}
+              >
+                Fechar
+              </Button>
+              {canManageInspections && (
+                <Button 
+                  onClick={() => {
+                    setIsViewModalOpen(false);
+                    handleEdit(selectedViewInspection);
+                  }}
+                >
+                  <Edit className="h-4 w-4 mr-2" />
+                  Editar
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

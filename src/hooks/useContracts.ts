@@ -88,13 +88,14 @@ export const useContracts = () => {
     }
   };
 
-  const getAvailableVehicles = async (startDate: string, endDate: string): Promise<AvailableVehicle[]> => {
+  const getAvailableVehicles = async (startDate: string, endDate: string, excludeContractId?: string): Promise<AvailableVehicle[]> => {
     try {
       const { data, error } = await supabase
         .rpc('fn_available_vehicles', {
           p_start_date: startDate,
           p_end_date: endDate,
-          p_tenant_id: DEFAULT_TENANT_ID
+          p_tenant_id: DEFAULT_TENANT_ID,
+          p_exclude_contract_id: excludeContractId || null
         });
 
       if (error) throw error;

@@ -1,11 +1,30 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardContent } from '../components/UI/Card';
 import { Button } from '../components/UI/Button';
 import { Badge } from '../components/UI/Badge';
 import { useVehicles } from '../hooks/useVehicles';
 import { useCosts } from '../hooks/useCosts';
-import { Plus, Search, Filter, Car, DollarSign, Loader2, Edit, Eye, Trash2, Calendar, MapPin, Fuel, Gauge } from 'lucide-react';
+import { useContracts } from '../hooks/useContracts';
+import { Plus, Search, Filter, Car, DollarSign, Loader2, Edit, Eye, Trash2, Calendar, MapPin, Fuel, Gauge, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import toast from 'react-hot-toast';
+
+// Tipos para ordenação
+type SortField = 'plate' | 'model' | 'year' | 'status' | 'totalCost' | 'location';
+type SortDirection = 'asc' | 'desc';
+
+interface VehicleWithCosts {
+  id: string; 
+  plate: string;
+  model: string;
+  year: number;
+  type: string;
+  status: string;
+  location?: string | null;
+  totalCost: number;
+  actualStatus: string;
+  contractInfo?: any;
+  [key: string]: any;
+}
 
 // Modal para editar/adicionar veículo
 const VehicleModal: React.FC<{
@@ -494,34 +513,119 @@ const VehicleDetailModal: React.FC<{
 export const Fleet: React.FC = () => {
   const { vehicles, loading, createVehicle, updateVehicle, deleteVehicle } = useVehicles();
   const { costs } = useCosts();
+  const { contracts } = useContracts();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [selectedVehicle, setSelectedVehicle] = useState<any>(undefined);
+  const [sortField, setSortField] = useState<SortField>('plate');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  const [vehiclesWithCosts, setVehiclesWithCosts] = useState<VehicleWithCosts[]>([]);
 
-  const filteredVehicles = vehicles.filter(vehicle => {
-    const matchesSearch = 
-      vehicle.plate.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      vehicle.model.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      vehicle.location?.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesStatus = statusFilter === '' || vehicle.status === statusFilter;
-    const matchesType = typeFilter === '' || vehicle.type === typeFilter;
-    
-    return matchesSearch && matchesStatus && matchesType;
-  });
+  // Função para calcular custos totais e status real dos veículos
+  useEffect(() => {
+    const enrichVehicles = () => {
+      const enrichedVehicles = vehicles.map(vehicle => {
+        // Calcular custo total do veículo
+        const vehicleCosts = costs.filter(cost => cost.vehicle_id === vehicle.id);
+        const totalCost = vehicleCosts.reduce((sum, cost) => sum + (cost.amount || 0), 0);
+
+        // Verificar se o veículo está em contrato ativo
+        const activeContract = contracts.find(contract => 
+          contract.vehicle_id === vehicle.id && 
+          contract.status === 'Ativo'
+        );
+
+        // Determinar status real
+        let actualStatus = vehicle.status;
+        if (activeContract) {
+          actualStatus = 'Em Contrato';
+        } else if (vehicle.status === 'Em Uso' && !activeContract) {
+          actualStatus = 'Disponível'; // Corrigir status se não há contrato ativo
+        }
+
+        return {
+          ...vehicle,
+          totalCost,
+          actualStatus,
+          contractInfo: activeContract
+        } as VehicleWithCosts;
+      });
+
+      setVehiclesWithCosts(enrichedVehicles);
+    };
+
+    enrichVehicles();
+  }, [vehicles, costs, contracts]);
+
+  // Função de ordenação
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  // Aplicar filtros e ordenação
+  const filteredAndSortedVehicles = vehiclesWithCosts
+    .filter(vehicle => {
+      const matchesSearch = 
+        vehicle.plate.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        vehicle.model.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        vehicle.location?.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesStatus = statusFilter === '' || vehicle.actualStatus === statusFilter;
+      const matchesType = typeFilter === '' || vehicle.type === typeFilter;
+      
+      return matchesSearch && matchesStatus && matchesType;
+    })
+    .sort((a, b) => {
+      let aValue: any = a[sortField];
+      let bValue: any = b[sortField];
+
+      // Tratar campos especiais
+      if (sortField === 'totalCost') {
+        aValue = a.totalCost;
+        bValue = b.totalCost;
+      } else if (sortField === 'status') {
+        aValue = a.actualStatus;
+        bValue = b.actualStatus;
+      }
+
+      // Ordenação
+      if (typeof aValue === 'string') {
+        aValue = aValue.toLowerCase();
+        bValue = bValue.toLowerCase();
+      }
+
+      if (sortDirection === 'asc') {
+        return aValue > bValue ? 1 : -1;
+      } else {
+        return aValue < bValue ? 1 : -1;
+      }
+    });
 
   const getStatusBadge = (status: string) => {
     const variants = {
       'Disponível': 'success',
+      'Em Contrato': 'info',
       'Em Uso': 'info',
       'Manutenção': 'warning',
       'Inativo': 'error'
     } as const;
 
     return <Badge variant={variants[status as keyof typeof variants] || 'secondary'}>{status}</Badge>;
+  };
+
+  const getSortIcon = (field: SortField) => {
+    if (sortField !== field) {
+      return <ArrowUpDown className="h-4 w-4" />;
+    }
+    return sortDirection === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />;
   };
 
   const handleEdit = (vehicle: any) => {
@@ -558,11 +662,12 @@ export const Fleet: React.FC = () => {
     }
   };
 
-  // Calculate statistics
-  const totalVehicles = vehicles.length;
-  const availableVehicles = vehicles.filter(v => v.status === 'Disponível').length;
-  const inUseVehicles = vehicles.filter(v => v.status === 'Em Uso').length;
-  const maintenanceVehicles = vehicles.filter(v => v.status === 'Manutenção').length;
+  // Calculate statistics baseado no status real
+  const totalVehicles = vehiclesWithCosts.length;
+  const availableVehicles = vehiclesWithCosts.filter(v => v.actualStatus === 'Disponível').length;
+  const inContractVehicles = vehiclesWithCosts.filter(v => v.actualStatus === 'Em Contrato').length;
+  const maintenanceVehicles = vehiclesWithCosts.filter(v => v.actualStatus === 'Manutenção').length;
+  const totalFleetCost = vehiclesWithCosts.reduce((sum, v) => sum + v.totalCost, 0);
 
   if (loading) {
     return (
@@ -587,7 +692,7 @@ export const Fleet: React.FC = () => {
       </div>
 
       {/* Statistics Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-6">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 lg:gap-6">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -622,7 +727,7 @@ export const Fleet: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-secondary-600 text-xs lg:text-sm font-medium">Em Uso</p>
-                <p className="text-xl lg:text-2xl font-bold text-info-600">{inUseVehicles}</p>
+                <p className="text-xl lg:text-2xl font-bold text-info-600">{inContractVehicles}</p>
                 <p className="text-xs text-info-600 mt-1">Em operação</p>
               </div>
               <div className="h-8 w-8 lg:h-12 lg:w-12 bg-info-100 rounded-lg flex items-center justify-center">
@@ -642,6 +747,23 @@ export const Fleet: React.FC = () => {
               </div>
               <div className="h-8 w-8 lg:h-12 lg:w-12 bg-warning-100 rounded-lg flex items-center justify-center">
                 <Car className="h-4 w-4 lg:h-6 lg:w-6 text-warning-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-secondary-600 text-xs lg:text-sm font-medium">Custo Total da Frota</p>
+                <p className="text-lg lg:text-xl font-bold text-primary-600">
+                  R$ {totalFleetCost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </p>
+                <p className="text-xs text-primary-600 mt-1">Investimento total</p>
+              </div>
+              <div className="h-8 w-8 lg:h-12 lg:w-12 bg-primary-100 rounded-lg flex items-center justify-center">
+                <DollarSign className="h-4 w-4 lg:h-6 lg:w-6 text-primary-600" />
               </div>
             </div>
           </CardContent>
@@ -672,6 +794,7 @@ export const Fleet: React.FC = () => {
               >
                 <option value="">Todos os Status</option>
                 <option value="Disponível">Disponível</option>
+                <option value="Em Contrato">Em Contrato</option>
                 <option value="Em Uso">Em Uso</option>
                 <option value="Manutenção">Manutenção</option>
                 <option value="Inativo">Inativo</option>
@@ -698,20 +821,20 @@ export const Fleet: React.FC = () => {
       <Card>
         <CardHeader className="p-4 lg:p-6">
           <h3 className="text-lg font-semibold text-secondary-900">
-            Veículos ({filteredVehicles.length})
+            Veículos ({filteredAndSortedVehicles.length})
           </h3>
         </CardHeader>
         <CardContent className="p-0">
           {/* Mobile Cards */}
           <div className="lg:hidden space-y-3 p-4">
-            {filteredVehicles.map((vehicle) => (
+            {filteredAndSortedVehicles.map((vehicle) => (
               <div key={vehicle.id} className="border border-secondary-200 rounded-lg p-4">
                 <div className="flex justify-between items-start mb-3">
                   <div>
                     <p className="font-medium text-secondary-900">{vehicle.plate}</p>
                     <p className="text-sm text-secondary-600">{vehicle.model} ({vehicle.year})</p>
                   </div>
-                  {getStatusBadge(vehicle.status)}
+                  {getStatusBadge(vehicle.actualStatus)}
                 </div>
                 <div className="grid grid-cols-2 gap-3 text-sm mb-3">
                   <div>
@@ -721,6 +844,16 @@ export const Fleet: React.FC = () => {
                   <div>
                     <span className="text-secondary-500">Categoria:</span>
                     <p className="font-medium">{vehicle.category}</p>
+                  </div>
+                  <div>
+                    <span className="text-secondary-500">Custo Total:</span>
+                    <p className="font-medium text-primary-600">
+                      R$ {vehicle.totalCost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-secondary-500">Localização:</span>
+                    <p className="font-medium">{vehicle.location || '-'}</p>
                   </div>
                 </div>
                 <div className="flex justify-end space-x-2">
@@ -752,18 +885,67 @@ export const Fleet: React.FC = () => {
             <table className="w-full">
               <thead className="bg-secondary-50">
                 <tr>
-                  <th className="text-left py-3 px-6 text-sm font-medium text-secondary-600">Placa</th>
-                  <th className="text-left py-3 px-6 text-sm font-medium text-secondary-600">Modelo</th>
-                  <th className="text-left py-3 px-6 text-sm font-medium text-secondary-600">Ano</th>
+                  <th 
+                    className="text-left py-3 px-6 text-sm font-medium text-secondary-600 cursor-pointer hover:bg-secondary-100"
+                    onClick={() => handleSort('plate')}
+                  >
+                    <div className="flex items-center space-x-1">
+                      <span>Placa</span>
+                      {getSortIcon('plate')}
+                    </div>
+                  </th>
+                  <th 
+                    className="text-left py-3 px-6 text-sm font-medium text-secondary-600 cursor-pointer hover:bg-secondary-100"
+                    onClick={() => handleSort('model')}
+                  >
+                    <div className="flex items-center space-x-1">
+                      <span>Modelo</span>
+                      {getSortIcon('model')}
+                    </div>
+                  </th>
+                  <th 
+                    className="text-left py-3 px-6 text-sm font-medium text-secondary-600 cursor-pointer hover:bg-secondary-100"
+                    onClick={() => handleSort('year')}
+                  >
+                    <div className="flex items-center space-x-1">
+                      <span>Ano</span>
+                      {getSortIcon('year')}
+                    </div>
+                  </th>
                   <th className="text-left py-3 px-6 text-sm font-medium text-secondary-600">Tipo</th>
                   <th className="text-left py-3 px-6 text-sm font-medium text-secondary-600">Categoria</th>
-                  <th className="text-left py-3 px-6 text-sm font-medium text-secondary-600">Localização</th>
-                  <th className="text-left py-3 px-6 text-sm font-medium text-secondary-600">Status</th>
+                  <th 
+                    className="text-left py-3 px-6 text-sm font-medium text-secondary-600 cursor-pointer hover:bg-secondary-100"
+                    onClick={() => handleSort('totalCost')}
+                  >
+                    <div className="flex items-center space-x-1">
+                      <span>Custo Total</span>
+                      {getSortIcon('totalCost')}
+                    </div>
+                  </th>
+                  <th 
+                    className="text-left py-3 px-6 text-sm font-medium text-secondary-600 cursor-pointer hover:bg-secondary-100"
+                    onClick={() => handleSort('location')}
+                  >
+                    <div className="flex items-center space-x-1">
+                      <span>Localização</span>
+                      {getSortIcon('location')}
+                    </div>
+                  </th>
+                  <th 
+                    className="text-left py-3 px-6 text-sm font-medium text-secondary-600 cursor-pointer hover:bg-secondary-100"
+                    onClick={() => handleSort('status')}
+                  >
+                    <div className="flex items-center space-x-1">
+                      <span>Status</span>
+                      {getSortIcon('status')}
+                    </div>
+                  </th>
                   <th className="text-left py-3 px-6 text-sm font-medium text-secondary-600">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-secondary-200">
-                {filteredVehicles.map((vehicle) => (
+                {filteredAndSortedVehicles.map((vehicle) => (
                   <tr key={vehicle.id} className="hover:bg-secondary-50">
                     <td className="py-4 px-6 text-sm font-medium text-secondary-900">
                       {vehicle.plate}
@@ -781,10 +963,18 @@ export const Fleet: React.FC = () => {
                       {vehicle.category}
                     </td>
                     <td className="py-4 px-6 text-sm text-secondary-600">
+                      <div className="flex items-center">
+                        <DollarSign className="h-4 w-4 mr-1 text-secondary-400" />
+                        <span className="font-medium">
+                          R$ {vehicle.totalCost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="py-4 px-6 text-sm text-secondary-600">
                       {vehicle.location || '-'}
                     </td>
                     <td className="py-4 px-6">
-                      {getStatusBadge(vehicle.status)}
+                      {getStatusBadge(vehicle.actualStatus)}
                     </td>
                     <td className="py-4 px-6">
                       <div className="flex items-center space-x-2">
@@ -814,7 +1004,7 @@ export const Fleet: React.FC = () => {
             </table>
           </div>
 
-          {filteredVehicles.length === 0 && (
+          {filteredAndSortedVehicles.length === 0 && (
             <div className="text-center py-8">
               <Car className="h-12 w-12 text-secondary-400 mx-auto mb-4" />
               <p className="text-secondary-600">Nenhum veículo encontrado</p>

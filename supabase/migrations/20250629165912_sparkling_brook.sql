@@ -58,7 +58,8 @@ CREATE INDEX IF NOT EXISTS idx_contracts_dates ON contracts(start_date, end_date
 CREATE OR REPLACE FUNCTION fn_available_vehicles(
   p_start_date date,
   p_end_date date,
-  p_tenant_id uuid DEFAULT '00000000-0000-0000-0000-000000000001'::uuid
+  p_tenant_id uuid DEFAULT '00000000-0000-0000-0000-000000000001'::uuid,
+  p_exclude_contract_id uuid DEFAULT NULL
 )
 RETURNS TABLE(
   id uuid,
@@ -85,6 +86,7 @@ BEGIN
       FROM contracts c
       WHERE c.tenant_id = p_tenant_id
         AND c.status = 'Ativo'
+        AND (p_exclude_contract_id IS NULL OR c.id != p_exclude_contract_id) -- Excluir contrato atual se editando
         AND tsrange(p_start_date::timestamp, p_end_date::timestamp, '[]') && 
             tsrange(c.start_date::timestamp, c.end_date::timestamp, '[]')
     )

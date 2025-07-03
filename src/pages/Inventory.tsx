@@ -409,7 +409,7 @@ const PartMovementsModal: React.FC<{
 };
 
 export const Inventory: React.FC = () => {
-  const { parts, loading: partsLoading, createPart, updatePart, deletePart } = useParts();
+  const { parts, loading: partsLoading, createPart, updatePart, deletePart, refetch: refetchParts } = useParts();
   const { stockMovements, loading: movementsLoading, createStockMovement } = useStockMovements();
   const { isAdmin, isManager, hasPermission } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
@@ -472,7 +472,14 @@ export const Inventory: React.FC = () => {
   };
 
   const handleSaveMovement = async (data: any) => {
-    await createStockMovement(data);
+    try {
+      await createStockMovement(data);
+      // Fazer refetch das peças para atualizar as quantidades
+      await refetchParts();
+      setIsMovementModalOpen(false);
+    } catch (error) {
+      console.error('Error saving movement:', error);
+    }
   };
 
   const handleDeletePart = async (id: string) => {

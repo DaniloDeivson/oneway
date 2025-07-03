@@ -64,7 +64,9 @@ export const FineForm: React.FC<FineFormProps> = ({
     observations: fine?.observations || '',
     contract_id: fine?.contract_id || '',
     customer_id: fine?.customer_id || '',
-    customer_name: fine?.customer_name || ''
+    customer_name: fine?.customer_name || '',
+    severity: fine?.severity || '',
+    points: fine?.points || 0
   });
   const [activeContracts, setActiveContracts] = useState<any[]>([]);
 
@@ -80,7 +82,7 @@ export const FineForm: React.FC<FineFormProps> = ({
 
   // Update active contracts when vehicle or infraction date changes
   useEffect(() => {
-    if (formData.vehicle_id && formData.infraction_date) {
+    if (formData.vehicle_id && formData.infraction_date && contracts.length > 0) {
       const matchingContracts = contracts.filter(contract => 
         contract.vehicle_id === formData.vehicle_id &&
         new Date(formData.infraction_date) >= new Date(contract.start_date) &&
@@ -100,13 +102,44 @@ export const FineForm: React.FC<FineFormProps> = ({
     } else {
       setActiveContracts([]);
     }
-  }, [formData.vehicle_id, formData.infraction_date, contracts]);
+  }, [formData.vehicle_id, formData.infraction_date, contracts.length]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Validações obrigatórias
+    if (!formData.vehicle_id) {
+      alert('Por favor, selecione um veículo.');
+      return;
+    }
+    
     if (!formData.employee_id) {
       alert('Por favor, selecione um responsável pelo lançamento da multa.');
+      return;
+    }
+    
+    if (!formData.infraction_type) {
+      alert('Por favor, selecione o tipo de infração.');
+      return;
+    }
+    
+    if (!formData.amount || formData.amount <= 0) {
+      alert('Por favor, informe um valor válido para a multa.');
+      return;
+    }
+    
+    if (!formData.infraction_date) {
+      alert('Por favor, informe a data da infração.');
+      return;
+    }
+    
+    if (!formData.severity) {
+      alert('Por favor, selecione a gravidade da infração.');
+      return;
+    }
+    
+    if (!formData.points || formData.points < 0) {
+      alert('Por favor, informe a pontuação da infração.');
       return;
     }
     
@@ -119,18 +152,30 @@ export const FineForm: React.FC<FineFormProps> = ({
     }
 
     const submitData = {
-      ...formData,
-      fine_number: formData.fine_number === '' ? null : formData.fine_number,
-      driver_id: formData.driver_id === '' ? null : formData.driver_id,
-      due_date: calculatedDueDate, // Ensure due_date is never null
-      document_ref: formData.document_ref === '' ? null : formData.document_ref,
-      observations: formData.observations === '' ? null : formData.observations,
-      contract_id: formData.contract_id === '' ? null : formData.contract_id,
-      customer_id: formData.customer_id === '' ? null : formData.customer_id,
-      customer_name: formData.customer_name === '' ? null : formData.customer_name
+      vehicle_id: formData.vehicle_id,
+      employee_id: formData.employee_id,
+      infraction_type: formData.infraction_type,
+      amount: Number(formData.amount),
+      infraction_date: formData.infraction_date,
+      due_date: calculatedDueDate,
+      status: formData.status || 'Pendente',
+      fine_number: formData.fine_number || null,
+      driver_id: formData.driver_id || null,
+      document_ref: formData.document_ref || null,
+      observations: formData.observations || null,
+      contract_id: formData.contract_id || null,
+      customer_id: formData.customer_id || null,
+      customer_name: formData.customer_name || null,
+      severity: formData.severity,
+      points: Number(formData.points)
     };
     
-    await onSubmit(submitData);
+    try {
+      await onSubmit(submitData);
+    } catch (error) {
+      console.error('Error submitting fine:', error);
+      alert('Erro ao salvar multa. Verifique os dados e tente novamente.');
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -466,6 +511,40 @@ export const FineForm: React.FC<FineFormProps> = ({
               {formData.contract_id && " A multa também será associada ao cliente no painel de cobrança."}
             </p>
           </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-secondary-700 mb-2">
+            Gravidade da Infração *
+          </label>
+          <select
+            name="severity"
+            value={formData.severity}
+            onChange={handleChange}
+            className="w-full border border-secondary-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
+            required
+          >
+            <option value="">Selecione a gravidade</option>
+            <option value="Baixa">Baixa</option>
+            <option value="Média">Média</option>
+            <option value="Alta">Alta</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-secondary-700 mb-2">
+            Pontuação da Infração *
+          </label>
+          <input
+            type="number"
+            name="points"
+            value={formData.points}
+            onChange={handleChange}
+            className="w-full border border-secondary-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
+            min="0"
+            required
+          />
         </div>
       </div>
 

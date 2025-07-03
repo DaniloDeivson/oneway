@@ -21,6 +21,7 @@ interface InspectionFormProps {
   employees: any[];
   onOpenDamageCart: () => void;
   damageCount: number;
+  damageCart?: any[];
 }
 
 export const InspectionForm: React.FC<InspectionFormProps> = ({
@@ -30,7 +31,8 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
   selectedVehicle,
   employees,
   onOpenDamageCart,
-  damageCount
+  damageCount,
+  damageCart = []
 }) => {
   const { user, hasPermission } = useAuth();
   const { contracts, refetch: refetchContracts } = useContracts();
@@ -76,9 +78,6 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
   // Fetch contracts when component mounts or vehicle changes
   useEffect(() => {
     if (formData.vehicle_id) {
-      // Ensure contracts are loaded
-      refetchContracts();
-      
       // Find active contracts for this vehicle
       const vehicleContracts = contracts.filter(contract => 
         contract.vehicle_id === formData.vehicle_id && 
@@ -100,7 +99,7 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
         setActiveContract(null);
       }
     }
-  }, [formData.vehicle_id, contracts, refetchContracts]);
+  }, [formData.vehicle_id, contracts]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -216,6 +215,7 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
         inspectionType={formData.inspection_type}
         contractId={formData.contract_id}
         onOpenDamageCart={onOpenDamageCart}
+        damageCart={damageCart}
       />
 
       <div className="flex flex-col sm:flex-row justify-end space-y-3 sm:space-y-0 sm:space-x-4 pt-4 lg:pt-6 border-t">

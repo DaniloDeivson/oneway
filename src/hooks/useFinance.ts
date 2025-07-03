@@ -265,6 +265,20 @@ export const useFinance = () => {
     }
   };
 
+  const deleteRecurringExpense = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('recurring_expenses')
+        .delete()
+        .eq('id', id)
+        .eq('tenant_id', DEFAULT_TENANT_ID);
+      if (error) throw error;
+      await fetchRecurringExpenses();
+    } catch (err) {
+      throw new Error(err instanceof Error ? err.message : 'Failed to delete recurring expense');
+    }
+  };
+
   useEffect(() => {
     fetchAccountsPayable();
     fetchSalaries();
@@ -286,6 +300,7 @@ export const useFinance = () => {
     generateRecurringExpenses,
     generateSalaries,
     syncCostsToAccountsPayable,
+    deleteRecurringExpense,
     refetch: async () => {
       await fetchAccountsPayable();
       await fetchSalaries();

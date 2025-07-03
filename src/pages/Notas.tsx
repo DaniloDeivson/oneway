@@ -1,53 +1,26 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardContent } from '../components/UI/Card';
 import { Button } from '../components/UI/Button';
 import { Badge } from '../components/UI/Badge';
-import { Receipt, Search, Filter, Plus, Loader2, Eye, Download, Trash2, Calendar, DollarSign, FileText, User, Building2 } from 'lucide-react';
+import { Receipt, Search, Filter, Plus, Loader2, Eye, Download, Trash2, Calendar, DollarSign, FileText, Building2 } from 'lucide-react';
+import { useCustomers } from '../hooks/useCustomers';
+import { supabase } from '../lib/supabase';
 
-// Dados de exemplo para notas fiscais
-const mockInvoices = [
-  {
-    id: '1',
-    number: 'NF-e 000001',
-    customer: 'Transportadora ABC Ltda',
-    customerDocument: '12.345.678/0001-90',
-    issueDate: '2024-06-15',
-    amount: 3500.00,
-    status: 'Emitida',
-    items: [
-      { description: 'Aluguel de veículo - Fiat Ducato', quantity: 1, unitPrice: 3500.00 }
-    ]
-  },
-  {
-    id: '2',
-    number: 'NF-e 000002',
-    customer: 'Logística XYZ',
-    customerDocument: '98.765.432/0001-10',
-    issueDate: '2024-06-20',
-    amount: 4800.00,
-    status: 'Emitida',
-    items: [
-      { description: 'Aluguel de veículo - Mercedes Sprinter', quantity: 1, unitPrice: 4800.00 }
-    ]
-  },
-  {
-    id: '3',
-    number: 'NF-e 000003',
-    customer: 'Transportes Rápidos Ltda',
-    customerDocument: '45.678.901/0001-23',
-    issueDate: '2024-06-25',
-    amount: 2800.00,
-    status: 'Pendente',
-    items: [
-      { description: 'Aluguel de veículo - Iveco Daily', quantity: 1, unitPrice: 2800.00 }
-    ]
-  }
-];
+type Invoice = {
+  id: string;
+  number: string;
+  customer: string;
+  customerDocument: string;
+  issueDate: string;
+  amount: number;
+  status: string;
+  items: { description: string; quantity: number; unitPrice: number }[];
+};
 
 const InvoiceModal: React.FC<{
   isOpen: boolean;
   onClose: () => void;
-  invoice?: any;
+  invoice?: Invoice | null;
 }> = ({ isOpen, onClose, invoice }) => {
   if (!isOpen || !invoice) return null;
 
@@ -152,6 +125,7 @@ const NewInvoiceModal: React.FC<{
   isOpen: boolean;
   onClose: () => void;
 }> = ({ isOpen, onClose }) => {
+  const { customers } = useCustomers();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     customer: '',
@@ -179,10 +153,19 @@ const NewInvoiceModal: React.FC<{
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: name === 'quantity' || name === 'unitPrice' ? Number(value) || 0 : value
-    }));
+    if (name === 'customer') {
+      const selected = customers.find((c: any) => c.name === value);
+      setFormData(prev => ({
+        ...prev,
+        customer: value,
+        customerDocument: selected?.document || ''
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [name]: name === 'quantity' || name === 'unitPrice' ? Number(value) || 0 : value
+      }));
+    }
   };
 
   const totalAmount = formData.quantity * formData.unitPrice;
@@ -217,9 +200,9 @@ const NewInvoiceModal: React.FC<{
                   required
                 >
                   <option value="">Selecione um cliente</option>
-                  <option value="Transportadora ABC Ltda">Transportadora ABC Ltda</option>
-                  <option value="Logística XYZ">Logística XYZ</option>
-                  <option value="Transportes Rápidos Ltda">Transportes Rápidos Ltda</option>
+                  {customers.map((c: any) => (
+                    <option key={c.id} value={c.name}>{c.name}</option>
+                  ))}
                 </select>
               </div>
               <div>
@@ -234,6 +217,7 @@ const NewInvoiceModal: React.FC<{
                   className="w-full border border-secondary-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
                   placeholder="00.000.000/0000-00"
                   required
+                  readOnly={!!formData.customer}
                 />
               </div>
             </div>
@@ -357,22 +341,32 @@ export const Notas: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('');
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
-  const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
+  const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+
+  // Buscar notas fiscais reais do Supabase
+  useEffect(() => {
+    const fetchInvoices = async () => {
+      const { data, error } = await supabase
+        .from('invoices')
+        .select('*')
+        .order('issueDate', { ascending: false });
+      if (!error) setInvoices((data as Invoice[]) || []);
+    };
+    fetchInvoices();
+  }, []);
 
   // Filtrar notas fiscais
-  const filteredInvoices = mockInvoices.filter(invoice => {
+  const filteredInvoices = invoices.filter((invoice: Invoice) => {
     const matchesSearch = 
-      invoice.number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      invoice.customer.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      invoice.customerDocument.toLowerCase().includes(searchTerm.toLowerCase());
-    
+      invoice.number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      invoice.customer?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      invoice.customerDocument?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === '' || invoice.status === statusFilter;
-    
     return matchesSearch && matchesStatus;
   });
 
-  const handleViewInvoice = (invoice: any) => {
+  const handleViewInvoice = (invoice: Invoice) => {
     setSelectedInvoice(invoice);
     setIsViewModalOpen(true);
   };
@@ -381,10 +375,14 @@ export const Notas: React.FC = () => {
     setIsNewModalOpen(true);
   };
 
-  const handleDeleteInvoice = (id: string) => {
+  // Excluir nota fiscal real do Supabase
+  const handleDeleteInvoice = async (id: string) => {
     if (confirm('Tem certeza que deseja excluir esta nota fiscal?')) {
-      // Simulação de exclusão
-      alert('Nota fiscal excluída com sucesso!');
+      const { error } = await supabase.from('invoices').delete().eq('id', id);
+      if (!error) {
+        setInvoices(prev => prev.filter(inv => inv.id !== id));
+        alert('Nota fiscal excluída com sucesso!');
+      }
     }
   };
 
@@ -409,7 +407,7 @@ export const Notas: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-secondary-600 text-xs lg:text-sm font-medium">Total de Notas</p>
-                <p className="text-xl lg:text-2xl font-bold text-secondary-900">{mockInvoices.length}</p>
+                <p className="text-xl lg:text-2xl font-bold text-secondary-900">{invoices.length}</p>
               </div>
               <div className="h-8 w-8 lg:h-12 lg:w-12 bg-primary-100 rounded-lg flex items-center justify-center">
                 <Receipt className="h-4 w-4 lg:h-6 lg:w-6 text-primary-600" />
@@ -424,7 +422,7 @@ export const Notas: React.FC = () => {
               <div>
                 <p className="text-secondary-600 text-xs lg:text-sm font-medium">Valor Total</p>
                 <p className="text-xl lg:text-2xl font-bold text-secondary-900">
-                  R$ {mockInvoices.reduce((sum, inv) => sum + inv.amount, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  R$ {invoices.reduce((sum, inv) => sum + inv.amount, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </p>
               </div>
               <div className="h-8 w-8 lg:h-12 lg:w-12 bg-success-100 rounded-lg flex items-center justify-center">
@@ -440,7 +438,7 @@ export const Notas: React.FC = () => {
               <div>
                 <p className="text-secondary-600 text-xs lg:text-sm font-medium">Emitidas</p>
                 <p className="text-xl lg:text-2xl font-bold text-secondary-900">
-                  {mockInvoices.filter(inv => inv.status === 'Emitida').length}
+                  {invoices.filter(inv => inv.status === 'Emitida').length}
                 </p>
               </div>
               <div className="h-8 w-8 lg:h-12 lg:w-12 bg-success-100 rounded-lg flex items-center justify-center">
@@ -456,7 +454,7 @@ export const Notas: React.FC = () => {
               <div>
                 <p className="text-secondary-600 text-xs lg:text-sm font-medium">Pendentes</p>
                 <p className="text-xl lg:text-2xl font-bold text-secondary-900">
-                  {mockInvoices.filter(inv => inv.status === 'Pendente').length}
+                  {invoices.filter(inv => inv.status === 'Pendente').length}
                 </p>
               </div>
               <div className="h-8 w-8 lg:h-12 lg:w-12 bg-warning-100 rounded-lg flex items-center justify-center">

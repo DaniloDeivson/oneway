@@ -5,9 +5,8 @@ import { Badge } from '../components/UI/Badge';
 import { useContracts } from '../hooks/useContracts';
 import { useCustomers } from '../hooks/useCustomers';
 import { useEmployees } from '../hooks/useEmployees';
-import { Plus, Search, Filter, Users, Calendar, DollarSign, TrendingUp, Loader2, Edit, Eye, Trash2, CheckCircle, UserCheck } from 'lucide-react';
+import { Plus, Search, Filter, Users, Calendar, DollarSign, TrendingUp, Loader2, Edit, Eye, Trash2, AlertTriangle, Car, CheckCircle, UserCheck } from 'lucide-react';
 import { ContractForm } from '../components/Contracts/ContractForm';
-import toast from 'react-hot-toast';
 
 const CustomerModal: React.FC<{
   isOpen: boolean;
@@ -158,7 +157,8 @@ const ContractModal: React.FC<{
   customers: any[];
   employees: any[];
   onSave: (data: any) => Promise<void>;
-}> = ({ isOpen, onClose, contract, customers, employees, onSave }) => {
+  getAvailableVehicles: (startDate: string, endDate: string) => Promise<any[]>;
+}> = ({ isOpen, onClose, contract, customers, employees, onSave, getAvailableVehicles }) => {
   const [loading, setLoading] = useState(false);
 
   if (!isOpen) return null;
@@ -167,10 +167,9 @@ const ContractModal: React.FC<{
     setLoading(true);
     try {
       await onSave(formData);
-      onClose();
-      toast.success('Contrato salvo com sucesso!');
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Erro ao salvar contrato');
+      console.error('Error saving contract:', error);
+      alert(error instanceof Error ? error.message : 'Erro ao salvar contrato');
     } finally {
       setLoading(false);
     }
@@ -194,6 +193,7 @@ const ContractModal: React.FC<{
           contract={contract}
           customers={customers}
           employees={employees}
+          getAvailableVehicles={getAvailableVehicles}
           loading={loading}
         />
       </div>
@@ -201,176 +201,27 @@ const ContractModal: React.FC<{
   );
 };
 
-// Modal para visualizar detalhes do contrato
-const ContractViewModal: React.FC<{
-  isOpen: boolean;
-  onClose: () => void;
-  contract?: any;
-  getSalespersonName: (id: string | null) => string;
-}> = ({ isOpen, onClose, contract, getSalespersonName }) => {
-  if (!isOpen || !contract) return null;
-
-  const totalDays = Math.ceil((new Date(contract.end_date).getTime() - new Date(contract.start_date).getTime()) / (1000 * 60 * 60 * 24)) + 1;
-  const totalValue = totalDays * contract.daily_rate;
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg p-4 lg:p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="flex justify-between items-center mb-4 lg:mb-6">
-          <h2 className="text-lg lg:text-xl font-semibold text-secondary-900">
-            Detalhes do Contrato
-          </h2>
-          <button onClick={onClose} className="text-secondary-400 hover:text-secondary-600 p-2">
-            ×
-          </button>
-        </div>
-
-        <div className="space-y-6">
-          {/* Informações do Cliente */}
-          <div className="bg-secondary-50 p-4 rounded-lg">
-            <h3 className="font-semibold text-secondary-900 mb-3">Informações do Cliente</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-secondary-700">Nome</label>
-                <p className="text-secondary-900">{contract.customers?.name}</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-secondary-700">Documento</label>
-                <p className="text-secondary-900">{contract.customers?.document}</p>
-              </div>
-              {contract.customers?.email && (
-                <div>
-                  <label className="block text-sm font-medium text-secondary-700">Email</label>
-                  <p className="text-secondary-900">{contract.customers.email}</p>
-                </div>
-              )}
-              {contract.customers?.phone && (
-                <div>
-                  <label className="block text-sm font-medium text-secondary-700">Telefone</label>
-                  <p className="text-secondary-900">{contract.customers.phone}</p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Informações do Veículo */}
-          <div className="bg-secondary-50 p-4 rounded-lg">
-            <h3 className="font-semibold text-secondary-900 mb-3">Informações do Veículo</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-secondary-700">Placa</label>
-                <p className="text-secondary-900">{contract.vehicles?.plate}</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-secondary-700">Modelo</label>
-                <p className="text-secondary-900">{contract.vehicles?.model} ({contract.vehicles?.year})</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-secondary-700">Tipo</label>
-                <p className="text-secondary-900">{contract.vehicles?.type}</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-secondary-700">Status</label>
-                <p className="text-secondary-900">{contract.vehicles?.status}</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Informações do Contrato */}
-          <div className="bg-secondary-50 p-4 rounded-lg">
-            <h3 className="font-semibold text-secondary-900 mb-3">Detalhes do Contrato</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-secondary-700">Data de Início</label>
-                <p className="text-secondary-900">{new Date(contract.start_date).toLocaleDateString('pt-BR')}</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-secondary-700">Data de Término</label>
-                <p className="text-secondary-900">{new Date(contract.end_date).toLocaleDateString('pt-BR')}</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-secondary-700">Valor Diário</label>
-                <p className="text-secondary-900">R$ {contract.daily_rate.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-secondary-700">Total de Dias</label>
-                <p className="text-secondary-900">{totalDays} dias</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-secondary-700">Valor Total</label>
-                <p className="text-lg font-semibold text-primary-600">R$ {totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-secondary-700">Status</label>
-                <p className="text-secondary-900">{contract.status}</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-secondary-700">Vendedor</label>
-                <p className="text-secondary-900">{getSalespersonName(contract.salesperson_id)}</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Observações */}
-          {contract.notes && (
-            <div className="bg-secondary-50 p-4 rounded-lg">
-              <h3 className="font-semibold text-secondary-900 mb-3">Observações</h3>
-              <p className="text-secondary-900 whitespace-pre-wrap">{contract.notes}</p>
-            </div>
-          )}
-        </div>
-
-        <div className="flex justify-end pt-6 border-t mt-6">
-          <Button variant="secondary" onClick={onClose}>
-            Fechar
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 export const Contracts: React.FC = () => {
-  const { contracts, statistics, loading, refetch, createContract, updateContract, deleteContract, finalizeExpiredContracts } = useContracts();
+  const { contracts, statistics, loading, createContract, updateContract, deleteContract, getAvailableVehicles, finalizeExpiredContracts } = useContracts();
   const { customers, createCustomer, updateCustomer } = useCustomers();
   const { employees } = useEmployees();
-  
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [isContractModalOpen, setIsContractModalOpen] = useState(false);
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
-  const [isContractViewModalOpen, setIsContractViewModalOpen] = useState(false);
-  const [selectedContract, setSelectedContract] = useState<any>(null);
-  const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
-  const [initialized, setInitialized] = useState(false);
+  const [selectedContract, setSelectedContract] = useState<any>(undefined);
+  const [selectedCustomer, setSelectedCustomer] = useState<any>(undefined);
 
-  // Inicializar dados apenas uma vez
+  // Finalizar contratos expirados automaticamente
   useEffect(() => {
-    if (!initialized) {
-      const initializeData = async () => {
-        try {
-          await Promise.all([
-            refetch(),
-            finalizeExpiredContracts()
-          ]);
-        } catch (error) {
-          console.error('Error initializing contract data:', error);
-        } finally {
-          setInitialized(true);
-        }
-      };
-      
-      initializeData();
-    }
-  }, [initialized, refetch, finalizeExpiredContracts]);
+    finalizeExpiredContracts();
+  }, []);
 
-  // Filter contracts based on search and status
-  const filteredContracts = contracts.filter((contract: any) => {
+  const filteredContracts = contracts.filter(contract => {
     const matchesSearch = 
       contract.customers?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      contract.customers?.document?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       contract.vehicles?.plate?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      contract.vehicles?.model?.toLowerCase().includes(searchTerm.toLowerCase());
+      contract.customers?.document?.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesStatus = statusFilter === '' || contract.status === statusFilter;
     
@@ -380,7 +231,7 @@ export const Contracts: React.FC = () => {
   const getStatusBadge = (status: string) => {
     const variants = {
       'Ativo': 'success',
-      'Finalizado': 'info',
+      'Finalizado': 'secondary',
       'Cancelado': 'error'
     } as const;
 
@@ -392,13 +243,8 @@ export const Contracts: React.FC = () => {
     setIsContractModalOpen(true);
   };
 
-  const handleViewContract = (contract: any) => {
-    setSelectedContract(contract);
-    setIsContractViewModalOpen(true);
-  };
-
   const handleNewContract = () => {
-    setSelectedContract(null);
+    setSelectedContract(undefined);
     setIsContractModalOpen(true);
   };
 
@@ -408,23 +254,15 @@ export const Contracts: React.FC = () => {
   };
 
   const handleNewCustomer = () => {
-    setSelectedCustomer(null);
+    setSelectedCustomer(undefined);
     setIsCustomerModalOpen(true);
   };
 
   const handleSaveContract = async (data: any) => {
-    try {
-      if (selectedContract) {
-        await updateContract(selectedContract.id, data);
-        toast.success('Contrato atualizado com sucesso!');
-      } else {
-        await createContract(data);
-        toast.success('Contrato criado com sucesso!');
-      }
-      await refetch(); // Atualiza a lista de contratos
-      setIsContractModalOpen(false); // Fecha o modal
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Erro ao salvar contrato');
+    if (selectedContract) {
+      await updateContract(selectedContract.id, data);
+    } else {
+      await createContract(data);
     }
   };
 
@@ -618,10 +456,7 @@ export const Contracts: React.FC = () => {
                     Total: R$ {((new Date(contract.end_date).getTime() - new Date(contract.start_date).getTime()) / (1000 * 60 * 60 * 24) + 1) * contract.daily_rate}
                   </span>
                   <div className="flex space-x-2">
-                    <button 
-                      onClick={() => handleViewContract(contract)}
-                      className="p-2 text-secondary-400 hover:text-secondary-600"
-                    >
+                    <button className="p-2 text-secondary-400 hover:text-secondary-600">
                       <Eye className="h-4 w-4" />
                     </button>
                     <button 
@@ -691,10 +526,7 @@ export const Contracts: React.FC = () => {
                     </td>
                     <td className="py-4 px-6">
                       <div className="flex items-center space-x-2">
-                        <button 
-                          onClick={() => handleViewContract(contract)}
-                          className="p-1 text-secondary-400 hover:text-secondary-600"
-                        >
+                        <button className="p-1 text-secondary-400 hover:text-secondary-600">
                           <Eye className="h-4 w-4" />
                         </button>
                         <button 
@@ -733,6 +565,7 @@ export const Contracts: React.FC = () => {
         customers={customers}
         employees={employees}
         onSave={handleSaveContract}
+        getAvailableVehicles={getAvailableVehicles}
       />
 
       <CustomerModal
@@ -740,13 +573,6 @@ export const Contracts: React.FC = () => {
         onClose={() => setIsCustomerModalOpen(false)}
         customer={selectedCustomer}
         onSave={handleSaveCustomer}
-      />
-
-      <ContractViewModal
-        isOpen={isContractViewModalOpen}
-        onClose={() => setIsContractViewModalOpen(false)}
-        contract={selectedContract}
-        getSalespersonName={getSalespersonName}
       />
     </div>
   );

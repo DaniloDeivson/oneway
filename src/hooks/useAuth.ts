@@ -22,7 +22,6 @@ export const useAuth = () => {
     const checkSession = async () => {
       try {
         if (!isMounted) return;
-        setLoading(true);
         
         // Check for existing session
         const { data: { session } } = await supabase.auth.getSession();
@@ -119,7 +118,7 @@ export const useAuth = () => {
             setError('Erro ao carregar dados do usuário');
           }
           
-          // SEMPRE definir loading como false após processar login
+          // Definir loading como false imediatamente após processar login
           if (isMounted) {
             setLoading(false);
           }
@@ -158,10 +157,7 @@ export const useAuth = () => {
       // User will be set by the onAuthStateChange listener
       toast.success('Login realizado com sucesso!');
       
-      // Garantir que loading seja false após 3 segundos como fallback
-      setTimeout(() => {
-        setLoading(false);
-      }, 3000);
+      // Loading será definido como false pelo onAuthStateChange listener
       
     } catch (err) {
       setLoading(false); // Only set loading to false on error

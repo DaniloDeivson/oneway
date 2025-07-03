@@ -8,7 +8,7 @@ import { useDrivers } from '../hooks/useDrivers';
 import { useEmployees } from '../hooks/useEmployees';
 import { useAuth } from '../hooks/useAuth';
 import { FineForm } from '../components/Fines/FineForm';
-import { Plus, Search, Filter, AlertTriangle, DollarSign, Calendar, Bell, BellOff, Loader2, Edit, Eye, Trash2, Car, User, FileText, Clock, UserCheck } from 'lucide-react';
+import { Plus, Search, Filter, AlertTriangle, DollarSign, Bell, BellOff, Loader2, Edit, Eye, Trash2, Car, User, Clock, UserCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 // Modal para editar/adicionar multa
@@ -133,13 +133,31 @@ export const Fines: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
+    console.log('handleDelete called with id:', id);
+    
+    if (!id || id === '') {
+      console.error('handleDelete: ID is empty or undefined');
+      toast.error('ID da multa é inválido');
+      return;
+    }
+    
     if (confirm('Tem certeza que deseja excluir esta multa?')) {
+      console.log('User confirmed deletion, proceeding...');
       try {
+        console.log('Calling deleteFine with id:', id);
         await deleteFine(id);
-        toast.success('Multa excluída com sucesso!');
+        console.log('deleteFine completed successfully');
+        // Note: toast.success is already called in the deleteFine function
       } catch (error) {
-        toast.error('Erro ao excluir multa');
+        console.error('Error in handleDelete:', error);
+        console.error('Error details:', {
+          message: error instanceof Error ? error.message : 'Unknown error',
+          stack: error instanceof Error ? error.stack : undefined
+        });
+        // Don't show another toast here since deleteFine already shows one
       }
+    } else {
+      console.log('User cancelled deletion');
     }
   };
 

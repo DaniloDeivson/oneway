@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '../UI/Button';
-import { Badge } from '../UI/Badge';
-import { Calendar, DollarSign, Car, User, Loader2, FileText } from 'lucide-react';
+
+import { Calendar, DollarSign, User, Loader2, FileText } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useContracts } from '../../hooks/useContracts';
 
@@ -78,7 +78,7 @@ export const FineForm: React.FC<FineFormProps> = ({
         setFormData(prev => ({ ...prev, employee_id: user.id }));
       }
     }
-  }, [fine, user, isAdmin, isManager, hasPermission, formData.employee_id]);
+  }, [fine, user, isAdmin, isManager, hasPermission]);
 
   // Update active contracts when vehicle or infraction date changes
   useEffect(() => {
@@ -90,8 +90,8 @@ export const FineForm: React.FC<FineFormProps> = ({
       );
       setActiveContracts(matchingContracts);
       
-      // Auto-select contract if there's only one match
-      if (matchingContracts.length === 1 && !formData.contract_id) {
+      // Auto-select contract if there's only one match and no contract is selected yet
+      if (matchingContracts.length === 1 && (!formData.contract_id || formData.contract_id === '')) {
         setFormData(prev => ({
           ...prev,
           contract_id: matchingContracts[0].id,
@@ -102,43 +102,63 @@ export const FineForm: React.FC<FineFormProps> = ({
     } else {
       setActiveContracts([]);
     }
-  }, [formData.vehicle_id, formData.infraction_date, contracts.length]);
+  }, [formData.vehicle_id, formData.infraction_date, contracts.length, formData.contract_id]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    console.log('=== FORM SUBMIT DEBUG ===');
+    console.log('Raw formData:', formData);
+    console.log('User:', user);
+    console.log('Vehicles:', vehicles);
+    console.log('Drivers:', drivers);
+    console.log('Employees:', employees);
+    
     // Validações obrigatórias
-    if (!formData.vehicle_id) {
+    if (!formData.vehicle_id || formData.vehicle_id === '') {
+      console.error('Validation failed: vehicle_id is empty');
       alert('Por favor, selecione um veículo.');
       return;
     }
     
-    if (!formData.employee_id) {
+    // employee_id: fallback para user.id se possível
+    let employeeId = formData.employee_id;
+    if (!employeeId && user) {
+      employeeId = user.id;
+      console.log('Using user.id as employeeId fallback:', employeeId);
+    }
+    if (!employeeId || employeeId === '') {
+      console.error('Validation failed: employee_id is empty');
       alert('Por favor, selecione um responsável pelo lançamento da multa.');
       return;
     }
     
-    if (!formData.infraction_type) {
+    if (!formData.infraction_type || formData.infraction_type === '') {
+      console.error('Validation failed: infraction_type is empty');
       alert('Por favor, selecione o tipo de infração.');
       return;
     }
     
-    if (!formData.amount || formData.amount <= 0) {
+    if (!formData.amount || isNaN(Number(formData.amount)) || Number(formData.amount) <= 0) {
+      console.error('Validation failed: amount is invalid:', formData.amount);
       alert('Por favor, informe um valor válido para a multa.');
       return;
     }
     
-    if (!formData.infraction_date) {
+    if (!formData.infraction_date || formData.infraction_date === '') {
+      console.error('Validation failed: infraction_date is empty');
       alert('Por favor, informe a data da infração.');
       return;
     }
     
-    if (!formData.severity) {
+    if (!formData.severity || formData.severity === '') {
+      console.error('Validation failed: severity is empty');
       alert('Por favor, selecione a gravidade da infração.');
       return;
     }
     
-    if (!formData.points || formData.points < 0) {
+    if (formData.points === undefined || formData.points === null || isNaN(Number(formData.points)) || Number(formData.points) < 0) {
+      console.error('Validation failed: points is invalid:', formData.points);
       alert('Por favor, informe a pontuação da infração.');
       return;
     }
@@ -149,31 +169,44 @@ export const FineForm: React.FC<FineFormProps> = ({
       const infractionDate = new Date(formData.infraction_date);
       infractionDate.setDate(infractionDate.getDate() + 30);
       calculatedDueDate = infractionDate.toISOString().split('T')[0];
+      console.log('Calculated due_date:', calculatedDueDate);
     }
 
+    // Nunca envie string vazia para campos opcionais, use null
     const submitData = {
       vehicle_id: formData.vehicle_id,
-      employee_id: formData.employee_id,
+      employee_id: employeeId,
       infraction_type: formData.infraction_type,
       amount: Number(formData.amount),
       infraction_date: formData.infraction_date,
       due_date: calculatedDueDate,
       status: formData.status || 'Pendente',
-      fine_number: formData.fine_number || null,
-      driver_id: formData.driver_id || null,
-      document_ref: formData.document_ref || null,
-      observations: formData.observations || null,
-      contract_id: formData.contract_id || null,
-      customer_id: formData.customer_id || null,
-      customer_name: formData.customer_name || null,
+      fine_number: formData.fine_number && formData.fine_number !== '' ? formData.fine_number : null,
+      driver_id: formData.driver_id && formData.driver_id !== '' ? formData.driver_id : null,
+      document_ref: formData.document_ref && formData.document_ref !== '' ? formData.document_ref : null,
+      observations: formData.observations && formData.observations !== '' ? formData.observations : null,
+      contract_id: formData.contract_id && formData.contract_id !== '' ? formData.contract_id : null,
+      customer_id: formData.customer_id && formData.customer_id !== '' ? formData.customer_id : null,
+      customer_name: formData.customer_name && formData.customer_name !== '' ? formData.customer_name : null,
       severity: formData.severity,
       points: Number(formData.points)
     };
+    
+    console.log('=== FINAL SUBMIT DATA ===');
+    console.log('submitData:', submitData);
+    console.log('Data types check:');
+    console.log('- vehicle_id:', typeof submitData.vehicle_id, submitData.vehicle_id);
+    console.log('- employee_id:', typeof submitData.employee_id, submitData.employee_id);
+    console.log('- amount:', typeof submitData.amount, submitData.amount);
+    console.log('- points:', typeof submitData.points, submitData.points);
+    console.log('- infraction_date:', typeof submitData.infraction_date, submitData.infraction_date);
+    console.log('- due_date:', typeof submitData.due_date, submitData.due_date);
     
     try {
       await onSubmit(submitData);
     } catch (error) {
       console.error('Error submitting fine:', error);
+      console.error('Data that caused error:', submitData);
       alert('Erro ao salvar multa. Verifique os dados e tente novamente.');
     }
   };

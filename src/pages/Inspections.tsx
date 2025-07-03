@@ -5,12 +5,14 @@ import { Badge } from '../components/UI/Badge';
 import { useInspections } from '../hooks/useInspections';
 import { useVehicles } from '../hooks/useVehicles';
 import { useEmployees } from '../hooks/useEmployees';
+import { useCosts } from '../hooks/useCosts';
 import DamageCartModal from '../components/Inspections/DamageCartModal';
 import { VehicleSearchModal } from '../components/Inspections/VehicleSearchModal';
 import { InspectionForm } from '../components/Inspections/InspectionForm';
-import { Plus, Search, Filter, ClipboardCheck, AlertTriangle, Camera, FileText, Loader2, Edit, Eye, Trash2, Car, CheckCircle, Clock, DollarSign, ShoppingCart, Mail, Fuel, Gauge } from 'lucide-react';
+import { Plus, Search, Filter, ClipboardCheck, AlertTriangle, FileText, Loader2, Edit, Eye, Trash2, Car, DollarSign, Mail, Fuel, Gauge } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../hooks/useAuth';
+import { supabase } from '../lib/supabase';
 
 interface DamageItem {
   id: string;
@@ -32,10 +34,11 @@ const InspectionModal: React.FC<{
   onUploadSignature: (blob: Blob) => Promise<string>;
 }> = ({ isOpen, onClose, inspection, selectedVehicle, employees, onSave, onUploadSignature }) => {
   // Move hooks to the top, before any conditional returns
-  const { uploadPhoto } = useInspections();
+  const { uploadPhoto, addInspectionItem } = useInspections();
   const [loading, setLoading] = useState(false);
   const [damageCart, setDamageCart] = useState<DamageItem[]>([]);
   const [isDamageCartOpen, setIsDamageCartOpen] = useState(false);
+  const [locationOptions, setLocationOptions] = useState<string[]>([]);
 
   // Add useEffect to synchronize form data when props change
   useEffect(() => {
@@ -59,14 +62,39 @@ const InspectionModal: React.FC<{
     }
   }, [isOpen, inspection, selectedVehicle]);
 
+  const fetchLocationOptions = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('inspections')
+        .select('location')
+        .not('location', 'eq', null)
+        .not('location', 'eq', '');
+      if (error) {
+        console.error('Error fetching locations:', error);
+        return;
+      }
+      if (data) {
+        const unique = Array.from(new Set(data.map((row: any) => row.location).filter(Boolean)));
+        setLocationOptions(unique);
+      }
+    } catch (err) {
+      console.error('Error in fetchLocationOptions:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen) fetchLocationOptions();
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const handleSubmit = async (formData: any) => {
     setLoading(true);
     try {
       // Para nova inspeção, passar também os danos do carrinho
+      // Para inspeção existente, passar os danos do carrinho para sincronização
       const damagesWithoutId = damageCart.map(({ id, ...damage }) => damage);
-      await onSave(formData, !inspection ? damagesWithoutId : undefined);
+      await onSave(formData, inspection ? damageCart : damagesWithoutId);
       
       // Clear damage cart and close modal
       setDamageCart([]);
@@ -135,6 +163,11 @@ const InspectionModal: React.FC<{
           onOpenDamageCart={() => setIsDamageCartOpen(true)}
           damageCount={damageCart.length}
           damageCart={damageCart}
+          locationOptions={locationOptions}
+          onUpdateDamageCart={setDamageCart}
+          onRemoveDamage={(damageId: string) => {
+            setDamageCart(prev => prev.filter(d => d.id !== damageId));
+          }}
         />
 
         <DamageCartModal
@@ -143,7 +176,7 @@ const InspectionModal: React.FC<{
           damageCart={damageCart}
           onUpdateCart={setDamageCart}
           onSaveCart={handleSaveDamageCart}
-          onUploadPhoto={uploadPhoto}
+          inspectionType={inspection ? inspection.inspection_type : 'CheckIn'}
         />
       </div>
     </div>
@@ -151,9 +184,10 @@ const InspectionModal: React.FC<{
 };
 
 export const Inspections: React.FC = () => {
-  const { inspections, statistics, loading, createInspection, updateInspection, deleteInspection, addInspectionItem, uploadPhoto, uploadSignature, processDamageNotifications } = useInspections();
+  const { inspections, statistics, loading, createInspection, updateInspection, deleteInspection, addInspectionItem, uploadPhoto, uploadSignature, processDamageNotifications, removeInspectionItem } = useInspections();
   const { vehicles } = useVehicles();
   const { employees } = useEmployees();
+  const { createCost } = useCosts();
   const { isAdmin, isManager, hasPermission } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
@@ -235,21 +269,18 @@ export const Inspections: React.FC = () => {
   const handleSave = async (data: any, damages?: any[]) => {
     try {
       if (selectedInspection) {
+        // Atualizar inspeção existente
         await updateInspection(selectedInspection.id, data);
+        
+        // Sincronizar danos do carrinho com os danos existentes
+        await syncInspectionDamages(selectedInspection.id, damages || []);
+        
         toast.success('Inspeção atualizada com sucesso!');
       } else {
-        // Criar nova inspeção
-        const newInspection = await createInspection(data);
-        
-        // Se há danos, adicionar após criar a inspeção
+        // Criar nova inspeção e já passar os danos
+        const newInspection = await createInspection(data, damages || []);
         if (damages && damages.length > 0 && newInspection) {
-          for (const damage of damages) {
-            await addInspectionItem(newInspection.id, damage);
-          }
-          
-          // Criar automaticamente custos e cobranças para os danos
           await createDamageCostsAndCharges(newInspection, damages, data);
-          
           toast.success(`Inspeção criada com ${damages.length} danos registrados!`);
         } else {
           toast.success('Inspeção criada com sucesso!');
@@ -262,22 +293,67 @@ export const Inspections: React.FC = () => {
     }
   };
 
+  // Nova função para sincronizar danos de uma inspeção existente
+  const syncInspectionDamages = async (inspectionId: string, newDamages: any[]) => {
+    try {
+      // Buscar danos existentes da inspeção
+      const currentInspection = inspections.find(i => i.id === inspectionId);
+      const existingDamages = currentInspection?.inspection_items || [];
+      
+      console.log('Syncing damages:', {
+        inspectionId,
+        existingDamages: existingDamages.length,
+        newDamages: newDamages.length
+      });
+
+      // Identificar danos a serem removidos (existem no banco mas não estão no carrinho)
+      const damageIdsToRemove = existingDamages
+        .filter(existing => !newDamages.some(newDamage => newDamage.id === existing.id))
+        .map(damage => damage.id);
+
+      // Remover danos que não estão mais no carrinho
+      for (const damageId of damageIdsToRemove) {
+        await removeInspectionItem(damageId);
+        console.log('Removed damage:', damageId);
+      }
+
+      // Identificar danos novos (estão no carrinho mas não existem no banco)
+      const newDamagesToAdd = newDamages.filter(newDamage => 
+        !existingDamages.some(existing => existing.id === newDamage.id) && 
+        newDamage.location && newDamage.description // Só adicionar se tem dados válidos
+      );
+
+      // Adicionar novos danos
+      for (const damage of newDamagesToAdd) {
+        const { id, ...damageData } = damage; // Remove o ID temporário
+        await addInspectionItem(inspectionId, damageData);
+        console.log('Added new damage:', damage.location);
+      }
+
+      console.log(`Damage sync completed: ${damageIdsToRemove.length} removed, ${newDamagesToAdd.length} added`);
+      
+    } catch (error) {
+      console.error('Error syncing inspection damages:', error);
+      throw new Error('Falha ao sincronizar danos da inspeção');
+    }
+  };
+
   // Função para criar automaticamente custos e cobranças para danos
   const createDamageCostsAndCharges = async (inspection: any, damages: any[], inspectionData: any) => {
     try {
-      const { createCost } = await import('../hooks/useCosts');
-      
       for (const damage of damages) {
         // Criar custo para cada dano
         const costData = {
           description: `Dano detectado - ${damage.location}: ${damage.description}`,
           amount: 0, // Valor a definir
-          category: 'Avulsa',
-          origin: 'Inspeção',
+          category: 'Funilaria' as const,
+          origin: 'Patio' as const,
           vehicle_id: inspection.vehicle_id,
-          responsible: inspection.inspected_by,
-          status: 'Pendente',
-          notes: `Severidade: ${damage.severity} | Tipo: ${damage.damage_type} | Requer reparo: ${damage.requires_repair ? 'Sim' : 'Não'}`
+          cost_date: new Date().toISOString().split('T')[0], // Required field
+          status: 'Pendente' as const,
+          observations: `Severidade: ${damage.severity} | Tipo: ${damage.damage_type} | Requer reparo: ${damage.requires_repair ? 'Sim' : 'Não'}`,
+          source_reference_id: damage.id,
+          source_reference_type: 'inspection_item' as const
         };
         
         await createCost(costData);
@@ -621,7 +697,7 @@ export const Inspections: React.FC = () => {
                       </td>
                       <td className="py-4 px-6 text-sm text-secondary-600">
                         {inspection.contract_id ? (
-                          <Badge variant="primary">Contrato #{inspection.contract_id.substring(0, 8)}</Badge>
+                          <Badge variant="info">Contrato #{inspection.contract_id.substring(0, 8)}</Badge>
                         ) : (
                           <span className="text-secondary-400">-</span>
                         )}
@@ -845,7 +921,7 @@ export const Inspections: React.FC = () => {
                     <h4 className="font-semibold text-secondary-900 mb-3">Contrato</h4>
                     <div className="flex justify-between">
                       <span className="text-secondary-600">ID do Contrato:</span>
-                      <Badge variant="primary">
+                      <Badge variant="info">
                         #{selectedViewInspection.contract_id.substring(0, 8)}
                       </Badge>
                     </div>

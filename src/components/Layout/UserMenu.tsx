@@ -5,7 +5,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { Badge } from '../UI/Badge';
 
 export const UserMenu: React.FC = () => {
-  const { user, logout, hasMultipleRoles, getAdditionalRoles } = useAuth();
+  const { user, logout } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
@@ -17,7 +17,6 @@ export const UserMenu: React.FC = () => {
         setIsOpen(false);
       }
     };
-
     document.addEventListener('mousedown', handleClickOutside);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
@@ -26,54 +25,12 @@ export const UserMenu: React.FC = () => {
 
   const handleLogout = async () => {
     try {
-      console.log('UserMenu: Starting logout...');
       setIsOpen(false); // Close menu first
       await logout();
-      console.log('UserMenu: Logout successful, navigating to login...');
-    } catch (error) {
-      console.error('UserMenu: Logout failed:', error);
-      // Even if logout fails, still redirect to login page
-      console.log('UserMenu: Redirecting to login despite logout error...');
-    } finally {
-      // Always navigate to login regardless of logout success/failure
+      navigate('/login', { replace: true });
+    } catch {
       navigate('/login', { replace: true });
     }
-  };
-
-  // Get role display name
-  const getRoleName = (role: string) => {
-    const roleMap: Record<string, string> = {
-      'Admin': 'Administrador',
-      'Manager': 'Gerente',
-      'Mechanic': 'Mecânico',
-      'PatioInspector': 'Inspetor de Pátio',
-      'Sales': 'Vendedor',
-      'Driver': 'Motorista',
-      'FineAdmin': 'Admin. de Multas',
-      'Inventory': 'Estoquista',
-      'Finance': 'Financeiro',
-      'Compras': 'Compras'
-    };
-    
-    return roleMap[role] || role;
-  };
-
-  // Get additional roles badges
-  const getAdditionalRolesBadges = () => {
-    if (!hasMultipleRoles()) return null;
-    
-    const additionalRoles = getAdditionalRoles();
-    if (additionalRoles.length === 0) return null;
-    
-    return (
-      <div className="mt-1 flex flex-wrap gap-1">
-        {additionalRoles.map(role => (
-          <Badge key={role} variant="secondary" className="text-xs px-1.5 py-0.5">
-            {getRoleName(role)}
-          </Badge>
-        ))}
-      </div>
-    );
   };
 
   if (!user) return null;
@@ -91,7 +48,7 @@ export const UserMenu: React.FC = () => {
         </div>
         <div className="hidden md:block text-left">
           <p className="text-sm font-medium">{user.name || 'Usuário'}</p>
-          <p className="text-xs text-secondary-400">{getRoleName(user.role)}</p>
+          <p className="text-xs text-secondary-400">{user.role}</p>
         </div>
         <ChevronDown className="h-4 w-4 text-secondary-400" />
       </button>
@@ -103,12 +60,10 @@ export const UserMenu: React.FC = () => {
             <p className="text-xs text-secondary-500 truncate">{user.email}</p>
             <div className="flex items-center mt-1">
               <Badge variant="info" className="text-xs">
-                {getRoleName(user.role)}
+                {user.role}
               </Badge>
             </div>
-            {getAdditionalRolesBadges()}
           </div>
-          
           <button
             onClick={() => {
               setIsOpen(false);
@@ -119,7 +74,6 @@ export const UserMenu: React.FC = () => {
             <User className="h-4 w-4 mr-2 text-secondary-500" />
             Meu Perfil
           </button>
-          
           <button
             onClick={() => {
               setIsOpen(false);
@@ -130,9 +84,7 @@ export const UserMenu: React.FC = () => {
             <Settings className="h-4 w-4 mr-2 text-secondary-500" />
             Configurações
           </button>
-          
           <div className="border-t border-secondary-200 mt-1"></div>
-          
           <button
             onClick={handleLogout}
             className="block w-full text-left px-3 py-2 text-sm text-error-700 hover:bg-error-50 flex items-center"

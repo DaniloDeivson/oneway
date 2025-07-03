@@ -26,7 +26,7 @@ interface LoginModalProps {
 }
 
 const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
-  const { login, user, loading } = useAuth();
+  const { login, user, loginLoading } = useAuth();
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -45,46 +45,35 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
     },
   });
 
-  // Close modal when user is logged in
+  // Redirect when user is authenticated and loginLoading is false
   useEffect(() => {
-    if (user && isOpen) {
-      console.log('LoginModal: User detected, closing modal and redirecting...');
-      reset();
-      setErrorMsg(null);
-      setIsSubmitting(false);
+    if (user && !loginLoading && isOpen) {
+      console.log('✅ User authenticated, redirecting to dashboard');
       onClose();
-      
-      // Usar timeout para garantir que o estado seja atualizado
       setTimeout(() => {
         navigate('/', { replace: true });
       }, 100);
     }
-  }, [user, isOpen, onClose, reset, navigate]);
-
-  // Também verificar mudanças no loading
-  useEffect(() => {
-    if (user && !loading && isOpen) {
-      console.log('LoginModal: User authenticated and loading finished, redirecting...');
-      onClose();
-      navigate('/', { replace: true });
-    }
-  }, [user, loading, isOpen, onClose, navigate]);
+  }, [user, loginLoading, onClose, navigate, isOpen]);
 
   // Reset form when modal opens
   useEffect(() => {
     if (isOpen) {
-      reset();
+      reset({
+        email: '',
+        password: '',
+      });
       setErrorMsg(null);
+      setIsSubmitting(false);
     }
   }, [isOpen, reset]);
 
   const onSubmit = async (data: LoginFormData) => {
     setErrorMsg(null);
     setIsSubmitting(true);
-    
     try {
       await login(data.email, data.password);
-      // Don't close the modal here - let the useEffect handle it when user state changes
+      // Login successful - useEffect will handle redirect
     } catch (error: unknown) {
       setErrorMsg(error instanceof Error ? error.message : 'Erro ao autenticar');
     } finally {
@@ -93,7 +82,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
   };
 
   const handleClose = () => {
-    if (!isSubmitting) {
+    if (!isSubmitting && !loginLoading) {
       reset();
       setErrorMsg(null);
       onClose();
@@ -130,7 +119,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
                 <div className="relative bg-gradient-to-br from-blue-50 to-indigo-100 px-6 py-8">
                   <button
                     onClick={handleClose}
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || loginLoading}
                     className="absolute right-4 top-4 rounded-full p-2 text-gray-400 hover:bg-white/50 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
                   >
                     <X className="h-5 w-5" />
@@ -186,7 +175,8 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
                             }
                           `}
                           placeholder="seu@email.com"
-                          disabled={isSubmitting}
+                          disabled={isSubmitting || loginLoading}
+                          autoComplete="email"
                         />
                       </div>
                       {errors.email && (
@@ -213,14 +203,15 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
                               : 'border-gray-300 bg-white hover:border-gray-400'
                             }
                           `}
-                          placeholder="Sua senha"
-                          disabled={isSubmitting}
+                          placeholder="••••••••"
+                          disabled={isSubmitting || loginLoading}
+                          autoComplete="current-password"
                         />
                         <button
                           type="button"
                           onClick={() => setShowPassword(!showPassword)}
                           className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 focus:outline-none transition-colors duration-200"
-                          disabled={isSubmitting}
+                          disabled={isSubmitting || loginLoading}
                         >
                           {showPassword ? (
                             <EyeOff className="h-5 w-5" />
@@ -238,17 +229,17 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
                       <button
                         type="button"
                         onClick={handleClose}
-                        disabled={isSubmitting}
+                        disabled={isSubmitting || loginLoading}
                         className="flex-1 px-4 py-3 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
                       >
                         Cancelar
                       </button>
                       <button
                         type="submit"
-                        disabled={isSubmitting}
+                        disabled={isSubmitting || loginLoading}
                         className="flex-1 px-4 py-3 text-sm font-medium text-white bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg hover:from-blue-600 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl"
                       >
-                        {isSubmitting ? (
+                        {isSubmitting || loginLoading ? (
                           <div className="flex items-center justify-center">
                             <Loader2 className="h-5 w-5 animate-spin mr-2" />
                             Entrando...

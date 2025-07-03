@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Card, CardHeader, CardContent } from '../components/UI/Card';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { Car, DollarSign, Wrench, Users, TrendingUp, AlertTriangle } from 'lucide-react';
+import { Car, DollarSign, Wrench, Users, TrendingUp } from 'lucide-react';
 import { useVehicles } from '../hooks/useVehicles';
 import { useCosts } from '../hooks/useCosts';
 import { useServiceNotes } from '../hooks/useServiceNotes';
+import { useAuth } from '../hooks/useAuth';
 
 const vehicleStatusData = [
   { name: 'Disponível', value: 0, color: '#22c55e' },
@@ -44,9 +45,14 @@ const StatCard: React.FC<{
 );
 
 export const Dashboard: React.FC = () => {
+  const { user } = useAuth();
   const { vehicles } = useVehicles();
   const { costs } = useCosts();
   const { serviceNotes } = useServiceNotes();
+
+  useEffect(() => {
+    console.log('📊 Dashboard loaded successfully');
+  }, []);
 
   // Calculate statistics
   const totalCosts = costs.reduce((sum, cost) => sum + cost.amount, 0);
@@ -80,6 +86,11 @@ export const Dashboard: React.FC = () => {
       <div>
         <h1 className="text-3xl font-bold text-secondary-900">Dashboard</h1>
         <p className="text-secondary-600 mt-2">Visão geral da sua operação</p>
+        {user && (
+          <p className="text-sm text-gray-500 mt-1">
+            Logado como: <span className="font-medium">{user.name}</span> ({user.role})
+          </p>
+        )}
       </div>
 
       {/* Stats Grid */}
@@ -168,7 +179,7 @@ export const Dashboard: React.FC = () => {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {costs.slice(0, 3).map((cost, index) => (
+            {costs.slice(0, 3).map((cost) => (
               <div key={cost.id} className="flex items-center space-x-4 p-4 bg-secondary-50 rounded-lg">
                 <div className="h-8 w-8 bg-error-100 rounded-full flex items-center justify-center">
                   <DollarSign className="h-4 w-4 text-error-600" />

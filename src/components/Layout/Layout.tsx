@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet, Navigate, useLocation } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { MobileHeader } from './MobileHeader';
@@ -7,14 +7,18 @@ import { useAuth } from '../../hooks/useAuth';
 import { Loader2 } from 'lucide-react';
 
 export const Layout: React.FC = () => {
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { user, loading } = useAuth();
   const location = useLocation();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
+  // Show loading while authentication is being checked
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
+      <div className="flex items-center justify-center h-screen bg-gray-100">
+        <div className="text-center">
+          <Loader2 className="h-12 w-12 animate-spin text-blue-600 mx-auto mb-4" />
+          <p className="text-gray-600 text-lg">Verificando autenticação...</p>
+        </div>
       </div>
     );
   }
@@ -32,27 +36,27 @@ export const Layout: React.FC = () => {
 
       {/* Mobile Sidebar Overlay */}
       {isMobileMenuOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden">
-          <div 
-            className="fixed inset-0 bg-black bg-opacity-50"
+        <>
+          <div
+            className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
             onClick={() => setIsMobileMenuOpen(false)}
           />
-          <div className="fixed inset-y-0 left-0 w-64 bg-secondary-900">
+          <div className="fixed inset-y-0 left-0 w-64 z-50 lg:hidden">
             <Sidebar onClose={() => setIsMobileMenuOpen(false)} />
           </div>
-        </div>
+        </>
       )}
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col min-w-0 lg:min-h-screen">
+      <div className="flex-1 flex flex-col">
         {/* Mobile Header */}
         <div className="lg:hidden flex-shrink-0">
           <MobileHeader onMenuClick={() => setIsMobileMenuOpen(true)} />
         </div>
 
-        {/* Page Content */}
-        <main className="flex-1 overflow-x-hidden overflow-y-auto">
-          <div className="p-4 lg:p-8 min-h-full">
+        {/* Main Content Area */}
+        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-secondary-50">
+          <div className="container mx-auto px-4 py-8">
             <Outlet />
           </div>
         </main>

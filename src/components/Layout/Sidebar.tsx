@@ -17,12 +17,9 @@ import {
   ClipboardCheck,
   ShoppingBag,
   Wallet,
-  FileText,
   Receipt,
-  Boxes,
   CreditCard
 } from 'lucide-react';
-import { useAuth } from '../../hooks/useAuth';
 import { UserMenu } from './UserMenu';
 
 const navigationItems = [
@@ -49,12 +46,8 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
-  const { hasPermission } = useAuth();
-
-  // Filter navigation items based on user permissions
-  const filteredNavItems = navigationItems.filter(item => 
-    hasPermission(item.permission)
-  );
+  // Mostrar todos os menus, sem filtro de permissão
+  const filteredNavItems = navigationItems;
 
   return (
     <div className="flex flex-col w-64 bg-secondary-900 h-screen sticky top-0 overflow-y-auto">
@@ -98,7 +91,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
             <li key={item.name}>
               <NavLink
                 to={item.href}
-                onClick={onClose} // Close mobile menu when navigating
+                // Só fecha o menu mobile, nunca recarrega a página
+                onClick={onClose ? () => onClose() : undefined}
                 className={({ isActive }) =>
                   `group flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors ${
                     isActive

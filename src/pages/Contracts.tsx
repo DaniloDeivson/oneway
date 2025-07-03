@@ -256,24 +256,51 @@ const ContractViewModal: React.FC<{
           {/* Informações do Veículo */}
           <div className="bg-secondary-50 p-4 rounded-lg">
             <h3 className="font-semibold text-secondary-900 mb-3">Informações do Veículo</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-secondary-700">Placa</label>
-                <p className="text-secondary-900">{contract.vehicles?.plate}</p>
+            {contract.uses_multiple_vehicles && contract.contract_vehicles && contract.contract_vehicles.length > 0 ? (
+              <div className="space-y-4">
+                {contract.contract_vehicles.map((contractVehicle, index) => (
+                  <div key={contractVehicle.id} className="grid grid-cols-1 md:grid-cols-2 gap-4 p-3 bg-white rounded-lg">
+                    <div>
+                      <label className="block text-sm font-medium text-secondary-700">Veículo {index + 1} - Placa</label>
+                      <p className="text-secondary-900">{contractVehicle.vehicles?.plate}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-secondary-700">Modelo</label>
+                      <p className="text-secondary-900">{contractVehicle.vehicles?.model} ({contractVehicle.vehicles?.year})</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-secondary-700">Tipo</label>
+                      <p className="text-secondary-900">{contractVehicle.vehicles?.type}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-secondary-700">Valor Diário</label>
+                      <p className="text-secondary-900">
+                        R$ {(contractVehicle.daily_rate || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </p>
+                    </div>
+                  </div>
+                ))}
               </div>
-              <div>
-                <label className="block text-sm font-medium text-secondary-700">Modelo</label>
-                <p className="text-secondary-900">{contract.vehicles?.model} ({contract.vehicles?.year})</p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-secondary-700">Placa</label>
+                  <p className="text-secondary-900">{contract.vehicles?.plate}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-secondary-700">Modelo</label>
+                  <p className="text-secondary-900">{contract.vehicles?.model} ({contract.vehicles?.year})</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-secondary-700">Tipo</label>
+                  <p className="text-secondary-900">{contract.vehicles?.type}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-secondary-700">Status</label>
+                  <p className="text-secondary-900">{contract.vehicles?.status}</p>
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-secondary-700">Tipo</label>
-                <p className="text-secondary-900">{contract.vehicles?.type}</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-secondary-700">Status</label>
-                <p className="text-secondary-900">{contract.vehicles?.status}</p>
-              </div>
-            </div>
+            )}
           </div>
 
           {/* Informações do Contrato */}
@@ -593,7 +620,21 @@ export const Contracts: React.FC = () => {
                 <div className="flex justify-between items-start mb-3">
                   <div>
                     <p className="font-medium text-secondary-900">{contract.customers?.name}</p>
-                    <p className="text-sm text-secondary-600">{contract.vehicles?.plate} - {contract.vehicles?.model}</p>
+                    <div className="text-sm text-secondary-600">
+                      {contract.uses_multiple_vehicles && contract.contract_vehicles && contract.contract_vehicles.length > 0 ? (
+                        <div>
+                          <p className="font-medium">{contract.contract_vehicles.length} veículos:</p>
+                          {contract.contract_vehicles.slice(0, 2).map((cv: any, index: number) => (
+                            <p key={cv.id}>{cv.vehicles?.plate} - {cv.vehicles?.model}</p>
+                          ))}
+                          {contract.contract_vehicles.length > 2 && (
+                            <p className="text-xs">+{contract.contract_vehicles.length - 2} mais...</p>
+                          )}
+                        </div>
+                      ) : (
+                        <p>{contract.vehicles?.plate} - {contract.vehicles?.model}</p>
+                      )}
+                    </div>
                   </div>
                   {getStatusBadge(contract.status)}
                 </div>
@@ -606,7 +647,13 @@ export const Contracts: React.FC = () => {
                   </div>
                   <div>
                     <span className="text-secondary-500">Valor Diário:</span>
-                    <p className="font-medium">R$ {contract.daily_rate.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                    <p className="font-medium">
+                      {contract.uses_multiple_vehicles && contract.contract_vehicles ? (
+                        `R$ ${contract.contract_vehicles.reduce((sum, cv) => sum + (cv.daily_rate || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (total)`
+                      ) : (
+                        `R$ ${contract.daily_rate.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+                      )}
+                    </p>
                   </div>
                   <div>
                     <span className="text-secondary-500">Vendedor:</span>
@@ -615,7 +662,13 @@ export const Contracts: React.FC = () => {
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-secondary-500">
-                    Total: R$ {((new Date(contract.end_date).getTime() - new Date(contract.start_date).getTime()) / (1000 * 60 * 60 * 24) + 1) * contract.daily_rate}
+                    Total: R$ {(() => {
+                      const days = (new Date(contract.end_date).getTime() - new Date(contract.start_date).getTime()) / (1000 * 60 * 60 * 24) + 1;
+                      if (contract.uses_multiple_vehicles && contract.contract_vehicles) {
+                        return (contract.contract_vehicles.reduce((sum, cv) => sum + (cv.daily_rate || 0), 0) * days).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+                      }
+                      return (days * contract.daily_rate).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+                    })()}
                   </span>
                   <div className="flex space-x-2">
                     <button 
@@ -667,8 +720,22 @@ export const Contracts: React.FC = () => {
                     </td>
                     <td className="py-4 px-6">
                       <div>
-                        <p className="text-sm font-medium text-secondary-900">{contract.vehicles?.plate}</p>
-                        <p className="text-xs text-secondary-600">{contract.vehicles?.model} ({contract.vehicles?.year})</p>
+                        {contract.uses_multiple_vehicles && contract.contract_vehicles && contract.contract_vehicles.length > 0 ? (
+                          <div>
+                            <p className="text-sm font-medium text-secondary-900">{contract.contract_vehicles.length} veículos</p>
+                            <p className="text-xs text-secondary-600">
+                              {contract.contract_vehicles.slice(0, 2).map((cv: any, index: number) => (
+                                cv.vehicles?.plate
+                              )).join(', ')}
+                              {contract.contract_vehicles.length > 2 && ` +${contract.contract_vehicles.length - 2}`}
+                            </p>
+                          </div>
+                        ) : (
+                          <div>
+                            <p className="text-sm font-medium text-secondary-900">{contract.vehicles?.plate}</p>
+                            <p className="text-xs text-secondary-600">{contract.vehicles?.model} ({contract.vehicles?.year})</p>
+                          </div>
+                        )}
                       </div>
                     </td>
                     <td className="py-4 px-6 text-sm text-secondary-600">

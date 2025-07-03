@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { Loader2 } from 'lucide-react';
@@ -19,19 +19,6 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({
   const { user, loading, hasPermission, isAdmin, isManager } = useAuth();
   const location = useLocation();
 
-  // Log detalhado para debug
-  useEffect(() => {
-    console.log('AuthGuard State:', {
-      loading,
-      hasUser: !!user,
-      userRole: user?.role,
-      path: location.pathname,
-      timestamp: new Date().toISOString()
-    });
-  }, [loading, user, location.pathname]);
-
-  console.log('AuthGuard - Loading:', loading, 'User:', !!user, 'Path:', location.pathname);
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -44,11 +31,8 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({
   }
 
   if (!user) {
-    console.log('AuthGuard - No user, redirecting to login');
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
-
-  console.log('AuthGuard - User authenticated, rendering children');
 
   if (adminOnly && !isAdmin) {
     return <Navigate to="/unauthorized" replace />;

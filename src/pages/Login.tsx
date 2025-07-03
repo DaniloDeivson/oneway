@@ -8,22 +8,21 @@ import RegistrationModal from '../components/Auth/RegistrationModal';
 export const Login: React.FC = () => {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(true);
   const [isRegistrationModalOpen, setIsRegistrationModalOpen] = useState(false);
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const navigate = useNavigate();
 
   // If user is already logged in, redirect to dashboard
   useEffect(() => {
-    if (user) {
+    if (user && !loading) {
       console.log('User detected in Login page, redirecting to dashboard...');
-      // Use both navigate and window.location for redundancy
       navigate('/', { replace: true });
-      setTimeout(() => {
-        if (window.location.pathname === '/login') {
-          window.location.href = '/';
-        }
-      }, 500);
     }
-  }, [user, navigate]);
+  }, [user, loading, navigate]);
+
+  // Don't render login form if user is already authenticated
+  if (user && !loading) {
+    return null; // Will redirect via useEffect
+  }
 
   const handleOpenRegistration = () => {
     setIsLoginModalOpen(false);

@@ -5,6 +5,88 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>OneWay Rent A Car - Gestão de Frota</title>
+    <meta name="description" content="Sistema completo de gestão para locadora de veículos" />
+    
+    <!-- Preconnect to improve performance -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Favicon -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+    
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#1e40af">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="OneWay Rent A Car">
+    
+    <!-- Open Graph Meta Tags -->
+    <meta property="og:title" content="OneWay Rent A Car - Sistema de Gestão">
+    <meta property="og:description" content="Sistema completo de gestão para locadora de veículos">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://oneway-rent-a-car.netlify.app">
+    
+    <!-- Session Debug Script -->
+    <script>
+      // Debug script for session and environment testing
+      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        console.log('🔍 OneWay Rent A Car - Debug Mode');
+        console.log('='.repeat(50));
+        
+        // Environment check
+        const checkEnv = () => {
+          console.log('📦 Checking Environment Variables...');
+          
+          // Note: Can't access import.meta.env from regular script
+          // This will be checked when the app loads
+          console.log('💡 Environment variables will be checked when app loads');
+          console.log('💡 Look for "❌ Missing Supabase environment variables" in console');
+        };
+        
+        // Session check
+        const checkSession = () => {
+          console.log('🧪 Checking Session...');
+          const keys = Object.keys(localStorage);
+          const supabaseKeys = keys.filter(key => key.includes('supabase'));
+          
+          if (supabaseKeys.length === 0) {
+            console.log('❌ No Supabase keys found in localStorage');
+          } else {
+            console.log('✅ Found Supabase keys:', supabaseKeys);
+          }
+          
+          const lastLogin = localStorage.getItem('lastLogin');
+          if (lastLogin) {
+            const hours = Math.floor((Date.now() - new Date(lastLogin).getTime()) / (1000 * 60 * 60));
+            console.log(`⏰ Last login: ${new Date(lastLogin).toLocaleString()} (${hours}h ago)`);
+          } else {
+            console.log('⏰ No login record found');
+          }
+        };
+        
+        // Make functions available globally
+        window.checkEnv = checkEnv;
+        window.checkSession = checkSession;
+        window.debugLogin = () => {
+          console.log('🐛 Login Debug Info:');
+          checkEnv();
+          checkSession();
+          console.log('💡 Check Network tab if login is failing');
+          console.log('💡 Look for failed requests to Supabase');
+        };
+        
+        console.log('💡 Available debug functions:');
+        console.log('- checkEnv() - Check environment variables');
+        console.log('- checkSession() - Check stored session');
+        console.log('- debugLogin() - Full login debug');
+        console.log('='.repeat(50));
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

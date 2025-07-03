@@ -83,32 +83,110 @@ export const useCosts = () => {
 
   const createCost = async (costData: Omit<CostInsert, 'tenant_id'>) => {
     try {
-      const { data, error } = await supabase
+      console.log('🔍 DEBUG: Full costData received:', costData);
+      
+      // Step 1: Try with ONLY the absolutely minimal required fields
+      const minimalData = {
+        tenant_id: DEFAULT_TENANT_ID,
+        category: costData.category,
+        vehicle_id: costData.vehicle_id,
+        description: costData.description,
+        amount: costData.amount,
+        cost_date: costData.cost_date
+      };
+      
+      console.log('🔍 DEBUG: Trying minimal data first:', minimalData);
+
+      let { data, error } = await supabase
         .from('costs')
-        .insert([{ ...costData, tenant_id: DEFAULT_TENANT_ID }])
+        .insert([minimalData])
+        .select('*')
+        .single();
+
+      if (error) {
+        console.error('❌ ERROR with minimal data:', error);
+        console.log('🔍 Detailed error:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        });
+        
+        // If even minimal data fails, it's a schema/constraint issue
+        if (error.message.includes('check constraint') || error.message.includes('violates')) {
+          throw new Error(`Schema error - Execute SQL migration! Error: ${error.message}`);
+        }
+        
+        throw error;
+      }
+      
+      console.log('✅ SUCCESS with minimal data:', data);
+      
+      // Step 2: If minimal works, try adding optional fields one by one
+      if (data) {
+        console.log('🔍 Minimal insert worked, now testing optional fields...');
+        
+        // Test with status and origin
+        const withBasicOptional = {
+          ...minimalData,
+          status: costData.status || 'Pendente',
+          origin: costData.origin || 'Manual'
+        };
+        
+        console.log('🔍 Testing with status and origin:', withBasicOptional);
+        
+        // Delete the test record first
+        await supabase.from('costs').delete().eq('id', data.id);
+        
+        const { data: data2, error: error2 } = await supabase
+          .from('costs')
+          .insert([withBasicOptional])
+          .select('*')
+          .single();
+          
+        if (error2) {
+          console.error('❌ ERROR with status/origin:', error2);
+          throw new Error(`Status/Origin error: ${error2.message}`);
+        }
+        
+        console.log('✅ SUCCESS with status/origin');
+        
+        // Clean up and proceed with full data
+        await supabase.from('costs').delete().eq('id', data2.id);
+      }
+      
+      // Step 3: Try with full data if basics work
+      const fullData = {
+        ...costData,
+        tenant_id: DEFAULT_TENANT_ID
+      };
+      
+      console.log('🔍 Now trying full data:', fullData);
+      
+      const { data: finalData, error: finalError } = await supabase
+        .from('costs')
+        .insert([fullData])
         .select(`
           *,
           vehicles (
             plate,
             model
-          ),
-          contracts (
-            id,
-            contract_number
-          ),
-          customers (
-            id,
-            name
           )
         `)
         .single();
 
-      if (error) throw error;
+      if (finalError) {
+        console.error('❌ ERROR with full data:', finalError);
+        throw finalError;
+      }
+      
+      console.log('✅ SUCCESS with full data:', finalData);
       
       // Refresh the list to get the updated view data
       await fetchCosts();
-      return data;
+      return finalData;
     } catch (err) {
+      console.error('🚨 FULL ERROR in createCost:', err);
       throw new Error(err instanceof Error ? err.message : 'Failed to create cost');
     }
   };

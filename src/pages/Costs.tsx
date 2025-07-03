@@ -7,30 +7,48 @@ import { useVehicles } from '../hooks/useVehicles';
 import { useEmployees } from '../hooks/useEmployees';
 import { useAuth } from '../hooks/useAuth';
 import { CostsList } from '../components/Costs/CostsList';
-import { Plus, Search, Filter, Calendar, DollarSign, Loader2, AlertTriangle, User, MapPin, Wrench, ClipboardCheck, Edit2, RefreshCw, Bug, ShoppingBag, Check, FileText } from 'lucide-react';
+import { Plus, Search, Filter, Calendar, DollarSign, Loader2, AlertTriangle, ClipboardCheck, Edit2, RefreshCw, FileText } from 'lucide-react';
+import { Database } from '../types/database';
+
+type Cost = Database['public']['Tables']['costs']['Row'] & {
+  vehicles?: { plate: string; model: string };
+  created_by_name?: string;
+  created_by_role?: string;
+  created_by_code?: string;
+  origin_description?: string;
+  is_amount_to_define?: boolean;
+  contracts?: { id: string; contract_number: string };
+  customers?: { id: string; name: string };
+  vehicle_plate?: string;
+  vehicle_model?: string;
+};
+
+type CostInsert = Omit<Database['public']['Tables']['costs']['Insert'], 'tenant_id'>;
+type Vehicle = Database['public']['Tables']['vehicles']['Row'];
+type Employee = Database['public']['Tables']['employees']['Row'];
 
 const CostModal: React.FC<{
   isOpen: boolean;
   onClose: () => void;
-  cost?: any;
-  vehicles: any[];
-  employees: any[];
-  onSave: (data: any) => Promise<void>;
+  cost?: Cost;
+  vehicles: Vehicle[];
+  employees: Employee[];
+  onSave: (data: CostInsert) => Promise<void>;
   isReadOnly?: boolean;
 }> = ({ isOpen, onClose, cost, vehicles, employees, onSave, isReadOnly = false }) => {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
-    category: cost?.category || 'Avulsa',
+    category: cost?.category || 'Avulsa' as const,
     vehicle_id: cost?.vehicle_id || '',
     description: cost?.description || '',
     amount: cost?.amount || 0,
     cost_date: cost?.cost_date || new Date().toISOString().split('T')[0],
-    status: cost?.status || 'Pendente',
+    status: cost?.status || 'Pendente' as const,
     document_ref: cost?.document_ref || '',
     observations: cost?.observations || '',
-    origin: cost?.origin || 'Manual',
+    origin: cost?.origin || 'Manual' as const,
     created_by_employee_id: cost?.created_by_employee_id || '',
-    source_reference_type: cost?.source_reference_type || 'manual',
+    source_reference_type: cost?.source_reference_type || 'manual' as const,
     department: cost?.department || '',
     customer_id: cost?.customer_id || '',
     customer_name: cost?.customer_name || '',
@@ -43,7 +61,7 @@ const CostModal: React.FC<{
     e.preventDefault();
     setLoading(true);
     try {
-      const submitData = {
+      const submitData: CostInsert = {
         ...formData,
         created_by_employee_id: formData.created_by_employee_id === '' ? null : formData.created_by_employee_id,
         document_ref: formData.document_ref === '' ? null : formData.document_ref,
@@ -72,7 +90,7 @@ const CostModal: React.FC<{
   };
 
   const isAutomaticCost = cost?.origin && cost.origin !== 'Manual';
-  const isViewOnly = isReadOnly || isAutomaticCost || cost?.id;
+  const isViewOnly = isReadOnly || isAutomaticCost || Boolean(cost?.id);
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -380,13 +398,12 @@ const CostModal: React.FC<{
             )}
             {isViewOnly && cost?.status === 'Pendente' && (
               <Button 
-                type="submit" 
+                type="button" 
                 disabled={loading} 
                 className="w-full sm:w-auto"
-                onClick={(e) => {
-                  e.preventDefault();
+                onClick={() => {
                   setFormData(prev => ({ ...prev, status: 'Pago' }));
-                  handleSubmit(e);
+                  handleSubmit({ preventDefault: () => {} } as React.FormEvent);
                 }}
               >
                 {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
@@ -401,7 +418,7 @@ const CostModal: React.FC<{
 };
 
 export const Costs: React.FC = () => {
-  const { costs, loading, createCost, updateCost, deleteCost, debugAutomaticCosts, reprocessInspectionCosts, authorizePurchase, refetch } = useCosts();
+  const { costs, loading, createCost, updateCost, debugAutomaticCosts, reprocessInspectionCosts, authorizePurchase, refetch } = useCosts();
   const { vehicles } = useVehicles();
   const { employees } = useEmployees();
   const { isAdmin, isManager } = useAuth();
@@ -410,7 +427,7 @@ export const Costs: React.FC = () => {
   const [departmentFilter, setDepartmentFilter] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
-  const [selectedCost, setSelectedCost] = useState<any>(undefined);
+  const [selectedCost, setSelectedCost] = useState<Cost | undefined>(undefined);
   const [reprocessing, setReprocessing] = useState(false);
 
   // Debug automatic costs on component mount
@@ -431,7 +448,7 @@ export const Costs: React.FC = () => {
   const filteredCosts = costs.filter(cost => {
     const matchesSearch = 
       cost.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      cost.vehicle_plate?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      cost.vehicles?.plate?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       cost.customer_name?.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesOrigin = originFilter === '' || cost.origin === originFilter;
@@ -442,52 +459,17 @@ export const Costs: React.FC = () => {
     return matchesSearch && matchesOrigin && matchesDepartment;
   });
 
-  const getOriginBadge = (origin: string) => {
-    const variants = {
-      'Manual': 'secondary',
-      'Patio': 'info',
-      'Manutencao': 'warning',
-      'Sistema': 'primary',
-      'Compras': 'success'
-    } as const;
-
-    const labels = {
-      'Manual': 'Manual',
-      'Patio': 'Pátio',
-      'Manutencao': 'Manutenção',
-      'Sistema': 'Sistema',
-      'Compras': 'Compras'
-    } as const;
-
-    const icons = {
-      'Manual': Edit2,
-      'Patio': ClipboardCheck,
-      'Manutencao': Wrench,
-      'Sistema': FileText,
-      'Compras': ShoppingBag
-    } as const;
-
-    const Icon = icons[origin as keyof typeof icons] || Edit2;
-
-    return (
-      <Badge variant={variants[origin as keyof typeof variants] || 'secondary'} className="flex items-center">
-        <Icon className="h-3 w-3 mr-1" />
-        {labels[origin as keyof typeof labels] || origin}
-      </Badge>
-    );
-  };
-
   // Get unique departments for filter
   const departments = ['Cobrança', 'Manutenção', 'Administrativo', 'Financeiro'];
   const uniqueDepartments = [...new Set(costs.map(cost => cost.department).filter(Boolean))];
   const allDepartments = [...new Set([...departments, ...uniqueDepartments])];
 
-  const handleView = (cost: any) => {
+  const handleView = (cost: Cost) => {
     setSelectedCost(cost);
     setIsViewModalOpen(true);
   };
 
-  const handleEdit = (cost: any) => {
+  const handleEdit = (cost: Cost) => {
     setSelectedCost(cost);
     setIsModalOpen(true);
   };
@@ -503,7 +485,7 @@ export const Costs: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  const handleSave = async (data: any) => {
+  const handleSave = async (data: CostInsert) => {
     if (selectedCost) {
       await updateCost(selectedCost.id, data);
     } else {
@@ -511,7 +493,7 @@ export const Costs: React.FC = () => {
     }
   };
 
-  const handleAuthorizePurchase = async (cost: any) => {
+  const handleAuthorizePurchase = async (cost: Cost) => {
     // Only Admin and Manager can authorize purchases
     if (!isAdmin && !isManager) {
       alert('Apenas administradores e gerentes podem autorizar compras.');
@@ -763,7 +745,72 @@ export const Costs: React.FC = () => {
           </div>
         </CardHeader>
         <CardContent className="p-0">
-          {/* Mobile view omitted for brevity */}
+          {/* Mobile view */}
+          <div className="lg:hidden">
+            <div className="divide-y divide-secondary-200">
+              {filteredCosts.map((cost) => (
+                <div key={cost.id} className="p-4 space-y-3">
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-2 mb-1">
+                        <Badge variant="secondary" className="text-xs">
+                          {cost.origin_description || cost.origin}
+                        </Badge>
+                        <Badge variant="secondary" className="text-xs">
+                          {cost.category}
+                        </Badge>
+                      </div>
+                      <p className="text-sm font-medium text-secondary-900 mb-1">
+                        {cost.description}
+                      </p>
+                      <div className="flex items-center text-xs text-secondary-600 space-x-4">
+                        <span>{new Date(cost.cost_date).toLocaleDateString('pt-BR')}</span>
+                        <span>{cost.vehicles?.plate || '-'}</span>
+                        {cost.customer_name && <span>{cost.customer_name}</span>}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-medium text-secondary-900 mb-1">
+                        {cost.amount === 0 && cost.status === 'Pendente' ? (
+                          <span className="text-warning-600">A Definir</span>
+                        ) : (
+                          `R$ ${cost.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+                        )}
+                      </div>
+                      <Badge variant={cost.status === 'Pago' ? 'success' : cost.status === 'Autorizado' ? 'info' : 'warning'}>
+                        {cost.status}
+                      </Badge>
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <div className="text-xs text-secondary-600">
+                      {cost.created_by_name || 'Sistema'}
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Button 
+                        onClick={() => handleView(cost)}
+                        variant="secondary"
+                        size="sm"
+                        className="text-xs"
+                      >
+                        Visualizar
+                      </Button>
+                      {canEditCosts && (
+                        <Button 
+                          onClick={() => handleEdit(cost)}
+                          variant="secondary"
+                          size="sm"
+                          className="text-xs"
+                        >
+                          <Edit2 className="h-3 w-3" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
 
           {/* Desktop Table */}
           <div className="hidden lg:block overflow-x-auto">

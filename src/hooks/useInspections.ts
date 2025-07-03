@@ -93,59 +93,37 @@ export const useInspections = () => {
 
   const createInspection = async (inspectionData: Omit<InspectionInsert, 'tenant_id'>, damages?: Omit<InspectionItem, 'id' | 'inspection_id'>[]) => {
     try {
-      // Start a transaction
-      const { data: inspection, error: inspectionError } = await supabase
+      console.log('Creating inspection with data:', inspectionData);
+      
+      const { data: newInspection, error } = await supabase
         .from('inspections')
         .insert([{ ...inspectionData, tenant_id: DEFAULT_TENANT_ID }])
-        .select(`
-          *,
-          vehicles (
-            plate,
-            model,
-            year
-          ),
-          employees (
-            name,
-            role
-          ),
-          contracts (
-            id,
-            contract_number
-          ),
-          customers (
-            id,
-            name
-          )
-        `)
+        .select()
         .single();
-
-      if (inspectionError) throw inspectionError;
+        
+      if (error) throw error;
       
-      // Add inspection items if provided
+      console.log('Inspection created:', newInspection);
+      
       if (damages && damages.length > 0) {
+        console.log('Adding damages:', damages);
         const inspectionItems = damages.map(damage => ({
           ...damage,
-          inspection_id: inspection.id,
-          tenant_id: DEFAULT_TENANT_ID
+          inspection_id: newInspection.id
         }));
-
         const { error: itemsError } = await supabase
           .from('inspection_items')
           .insert(inspectionItems);
-
         if (itemsError) {
           console.error('Error creating inspection items:', itemsError);
-          // Don't throw error here, inspection was created successfully
         }
       }
-
-      // Add the empty inspection_items array to the new inspection
-      const newInspection = { ...inspection, inspection_items: [] };
       
-      setInspections(prev => [newInspection, ...prev]);
+      await fetchInspections();
       await fetchStatistics();
       return newInspection;
     } catch (err) {
+      console.error('Full error in createInspection:', err);
       toast.error('Erro ao criar inspeção: ' + (err instanceof Error ? err.message : 'Erro desconhecido'));
       throw new Error(err instanceof Error ? err.message : 'Failed to create inspection');
     }
@@ -153,6 +131,8 @@ export const useInspections = () => {
 
   const updateInspection = async (id: string, updates: InspectionUpdate) => {
     try {
+      console.log('Updating inspection with:', updates);
+      
       const { data, error } = await supabase
         .from('inspections')
         .update({ ...updates, updated_at: new Date().toISOString() })
@@ -164,29 +144,23 @@ export const useInspections = () => {
             model,
             year
           ),
-          employees (
-            name,
-            role
-          ),
-          contracts (
-            id,
-            contract_number
-          ),
-          customers (
-            id,
-            name
-          ),
           inspection_items (
             *
           )
         `)
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error updating inspection:', error);
+        throw error;
+      }
+      
+      console.log('Inspection updated successfully:', data);
       setInspections(prev => prev.map(i => i.id === id ? data : i));
       await fetchStatistics();
       return data;
     } catch (err) {
+      console.error('Full error in updateInspection:', err);
       toast.error('Erro ao atualizar inspeção: ' + (err instanceof Error ? err.message : 'Erro desconhecido'));
       throw new Error(err instanceof Error ? err.message : 'Failed to update inspection');
     }
@@ -237,7 +211,7 @@ export const useInspections = () => {
     try {
       const { data, error } = await supabase
         .from('inspection_items')
-        .insert([{ ...itemData, inspection_id: inspectionId, tenant_id: DEFAULT_TENANT_ID }])
+        .insert([{ ...itemData, inspection_id: inspectionId }])
         .select()
         .single();
 

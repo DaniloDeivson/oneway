@@ -22,6 +22,9 @@ interface InspectionFormProps {
   onOpenDamageCart: () => void;
   damageCount: number;
   damageCart?: any[];
+  locationOptions?: string[];
+  onUpdateDamageCart?: (damages: any[]) => void;
+  onRemoveDamage?: (damageId: string) => void;
 }
 
 export const InspectionForm: React.FC<InspectionFormProps> = ({
@@ -32,7 +35,10 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
   employees,
   onOpenDamageCart,
   damageCount,
-  damageCart = []
+  damageCart = [],
+  locationOptions,
+  onUpdateDamageCart,
+  onRemoveDamage
 }) => {
   const { user, hasPermission } = useAuth();
   const { contracts, refetch: refetchContracts } = useContracts();
@@ -46,7 +52,8 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
     signature_url: inspection?.signature_url || '',
     mileage: inspection?.mileage || '',
     fuel_level: inspection?.fuel_level ? Math.round(inspection.fuel_level * 100) : '',
-    contract_id: inspection?.contract_id || ''
+    contract_id: inspection?.contract_id || '',
+    location: inspection?.location || ''
   });
   const [activeContract, setActiveContract] = useState<any>(null);
   const [availableContracts, setAvailableContracts] = useState<any[]>([]);
@@ -123,16 +130,37 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
     setLoading(true);
     try {
       // Convert fuel_level to a number between 0 and 1
-      const processedData = {
+      const processedData: any = {
         ...formData,
         mileage: formData.mileage ? parseInt(formData.mileage.toString()) : null,
         fuel_level: formData.fuel_level ? parseFloat(formData.fuel_level.toString()) / 100 : null,
-        notes: formData.notes === '' ? null : formData.notes,
-        signature_url: formData.signature_url === '' ? null : formData.signature_url,
-        contract_id: formData.contract_id === '' ? null : formData.contract_id
+        notes: !formData.notes ? null : formData.notes,
+        signature_url: !formData.signature_url ? null : formData.signature_url,
+        contract_id: !formData.contract_id ? null : formData.contract_id,
+        location: !formData.location ? null : formData.location
       };
 
-      await onSubmit(processedData);
+      // Only add inspected_at for new inspections, not for updates
+      if (!inspection) {
+        processedData.inspected_at = new Date().toISOString();
+      }
+
+      // Sanitize data - ensure only valid database fields are included
+      const validFields = [
+        'vehicle_id', 'inspection_type', 'employee_id', 'inspected_by', 
+        'notes', 'signature_url', 'mileage', 'fuel_level', 'contract_id', 
+        'location', 'inspected_at'
+      ];
+      
+      const sanitizedData: any = {};
+      for (const field of validFields) {
+        if (processedData[field] !== undefined) {
+          sanitizedData[field] = processedData[field];
+        }
+      }
+
+      console.log('Submitting sanitized form data:', sanitizedData);
+      await onSubmit(sanitizedData);
       onCancel();
     } catch (error) {
       console.error('Error saving inspection:', error);
@@ -209,6 +237,25 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
         />
       </div>
 
+      {/* Location field */}
+      <div>
+        <label className="block text-sm font-medium text-secondary-700 mb-2">Localização</label>
+        <input
+          name="location"
+          value={formData.location}
+          onChange={handleChange}
+          list="location-suggestions"
+          className="w-full border border-secondary-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
+          placeholder="Ex: Pátio A, Oficina, Externo..."
+          autoComplete="off"
+        />
+        <datalist id="location-suggestions">
+          {locationOptions?.map(option => (
+            <option key={option} value={option} />
+          ))}
+        </datalist>
+      </div>
+
       {/* Damage Cart Section */}
       <DamageCartSummary 
         damageCount={damageCount}
@@ -216,6 +263,8 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
         contractId={formData.contract_id}
         onOpenDamageCart={onOpenDamageCart}
         damageCart={damageCart}
+        onUpdateCart={onUpdateDamageCart}
+        onRemoveDamage={onRemoveDamage}
       />
 
       <div className="flex flex-col sm:flex-row justify-end space-y-3 sm:space-y-0 sm:space-x-4 pt-4 lg:pt-6 border-t">

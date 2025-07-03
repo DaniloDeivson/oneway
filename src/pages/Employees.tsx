@@ -3,7 +3,7 @@ import { Card, CardHeader, CardContent } from '../components/UI/Card';
 import { Button } from '../components/UI/Button';
 import { Badge } from '../components/UI/Badge';
 import { useEmployees } from '../hooks/useEmployees';
-import { Plus, Search, Filter, UserCheck, Loader2, Edit, Trash2, Mail, Phone, Shield, User } from 'lucide-react';
+import { Plus, Search, Filter, UserCheck, Loader2, Edit, Trash2, Mail, Phone } from 'lucide-react';
 import RegisterForm from '../components/Auth/RegisterForm';
 import toast from 'react-hot-toast';
 
@@ -179,13 +179,31 @@ export const Employees: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
+    console.log('handleDelete called with id:', id);
+    
+    if (!id || id === '') {
+      console.error('handleDelete: ID is empty or undefined');
+      toast.error('ID do funcionário é inválido');
+      return;
+    }
+    
     if (confirm('Tem certeza que deseja excluir este funcionário?')) {
+      console.log('User confirmed deletion, proceeding...');
       try {
+        console.log('Calling deleteEmployee with id:', id);
         await deleteEmployee(id);
-        toast.success('Funcionário excluído com sucesso!');
+        console.log('deleteEmployee completed successfully');
+        // Note: toast.success is already called in the deleteEmployee function
       } catch (error) {
-        toast.error('Erro ao excluir funcionário');
+        console.error('Error in handleDelete:', error);
+        console.error('Error details:', {
+          message: error instanceof Error ? error.message : 'Unknown error',
+          stack: error instanceof Error ? error.stack : undefined
+        });
+        // Don't show another toast here since deleteEmployee already shows one
       }
+    } else {
+      console.log('User cancelled deletion');
     }
   };
 
@@ -284,12 +302,21 @@ export const Employees: React.FC = () => {
                   <button 
                     onClick={() => handleEdit(employee)}
                     className="p-2 text-secondary-400 hover:text-secondary-600"
+                    title="Editar"
                   >
                     <Edit className="h-4 w-4" />
                   </button>
                   <button 
                     onClick={() => handleToggleActive(employee)}
+                    className="p-2 text-secondary-400 hover:text-warning-600"
+                    title={employee.active ? 'Desativar' : 'Ativar'}
+                  >
+                    <UserCheck className="h-4 w-4" />
+                  </button>
+                  <button 
+                    onClick={() => handleDelete(employee.id)}
                     className="p-2 text-secondary-400 hover:text-error-600"
+                    title="Excluir"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
@@ -368,8 +395,15 @@ export const Employees: React.FC = () => {
                         </button>
                         <button 
                           onClick={() => handleToggleActive(employee)}
-                          className="p-1 text-secondary-400 hover:text-error-600"
+                          className="p-1 text-secondary-400 hover:text-warning-600"
                           title={employee.active ? 'Desativar' : 'Ativar'}
+                        >
+                          <UserCheck className="h-4 w-4" />
+                        </button>
+                        <button 
+                          onClick={() => handleDelete(employee.id)}
+                          className="p-1 text-secondary-400 hover:text-error-600"
+                          title="Excluir"
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>

@@ -1,8 +1,9 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '../UI/Button';
 import { Badge } from '../UI/Badge';
 import { Plus, Trash2, Camera, DollarSign, Save, RotateCcw } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { supabase } from '../../lib/supabase';
 
 interface DamageItem {
   id: string;
@@ -12,16 +13,15 @@ interface DamageItem {
   severity: 'Baixa' | 'Média' | 'Alta';
   photo_url?: string;
   requires_repair: boolean;
-  estimated_cost?: number;
 }
 
 interface DamageCartModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (damages: DamageItem[]) => void;
-  existingDamages?: DamageItem[];
+  damageCart: DamageItem[];
+  onUpdateCart: (damages: DamageItem[]) => void;
+  onSaveCart: (damages: Omit<DamageItem, 'id'>[]) => void;
   inspectionType: string;
-  contractId?: string;
 }
 
 const DAMAGE_TYPES = ['Arranhão', 'Amassado', 'Quebrado', 'Desgaste', 'Outro'];
@@ -30,20 +30,30 @@ const SEVERITIES = ['Baixa', 'Média', 'Alta'];
 export const DamageCartModal: React.FC<DamageCartModalProps> = ({
   isOpen,
   onClose,
-  onSave,
-  existingDamages = [],
+  damageCart,
+  onUpdateCart,
+  onSaveCart,
   inspectionType,
-  contractId
 }) => {
-  const [damages, setDamages] = useState<DamageItem[]>(() => {
-    // Inicializar com danos existentes ou uma linha vazia
-    if (existingDamages.length > 0) {
-      return [...existingDamages];
-    }
-    return [createEmptyDamage()];
-  });
-
+  const [locationOptions, setLocationOptions] = useState<string[]>([]);
   const tableRef = useRef<HTMLTableElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    // Buscar localizações distintas do banco
+    const fetchLocations = async () => {
+      const { data, error } = await supabase
+        .from('inspection_items')
+        .select('location')
+        .neq('location', '')
+        .neq('location', null);
+      if (!error && data) {
+        const unique = Array.from(new Set(data.map((d: any) => d.location.trim())));
+        setLocationOptions(unique);
+      }
+    };
+    fetchLocations();
+  }, [isOpen]);
 
   function createEmptyDamage(): DamageItem {
     return {
@@ -53,27 +63,27 @@ export const DamageCartModal: React.FC<DamageCartModalProps> = ({
       damage_type: 'Arranhão',
       severity: 'Baixa',
       requires_repair: false,
-      estimated_cost: 0
     };
   }
 
   if (!isOpen) return null;
 
+  const damages = damageCart.length > 0 ? damageCart : [createEmptyDamage()];
+
   const addNewRow = () => {
-    setDamages(prev => [...prev, createEmptyDamage()]);
+    onUpdateCart([...damages, createEmptyDamage()]);
   };
 
   const removeRow = (id: string) => {
     if (damages.length === 1) {
-      // Se só tem uma linha, limpar ao invés de remover
-      setDamages([createEmptyDamage()]);
+      onUpdateCart([createEmptyDamage()]);
     } else {
-      setDamages(prev => prev.filter(d => d.id !== id));
+      onUpdateCart(damages.filter(d => d.id !== id));
     }
   };
 
   const updateDamage = (id: string, field: keyof DamageItem, value: any) => {
-    setDamages(prev => prev.map(damage => 
+    onUpdateCart(damages.map(damage => 
       damage.id === id 
         ? { ...damage, [field]: value }
         : damage
@@ -91,13 +101,13 @@ export const DamageCartModal: React.FC<DamageCartModalProps> = ({
       return;
     }
 
-    onSave(validDamages);
+    onSaveCart(validDamages.map(({id, ...rest}) => rest));
     toast.success(`${validDamages.length} dano(s) registrado(s) com sucesso!`);
     onClose();
   };
 
   const clearAll = () => {
-    setDamages([createEmptyDamage()]);
+    onUpdateCart([createEmptyDamage()]);
     toast.success('Lista de danos limpa');
   };
 
@@ -108,10 +118,6 @@ export const DamageCartModal: React.FC<DamageCartModalProps> = ({
       'Alta': 'bg-red-100 text-red-800'
     };
     return colors[severity as keyof typeof colors] || 'bg-gray-100 text-gray-800';
-  };
-
-  const getTotalEstimatedCost = () => {
-    return damages.reduce((sum, damage) => sum + (damage.estimated_cost || 0), 0);
   };
 
   const validDamagesCount = damages.filter(d => 
@@ -137,7 +143,7 @@ export const DamageCartModal: React.FC<DamageCartModalProps> = ({
         </div>
 
         {/* Estatísticas */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
           <div className="bg-primary-50 p-4 rounded-lg">
             <div className="flex items-center justify-between">
               <div>
@@ -148,18 +154,6 @@ export const DamageCartModal: React.FC<DamageCartModalProps> = ({
             </div>
           </div>
           
-          <div className="bg-warning-50 p-4 rounded-lg">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-warning-600 font-medium">Custo Total Estimado</p>
-                <p className="text-2xl font-bold text-warning-700">
-                  R$ {getTotalEstimatedCost().toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                </p>
-              </div>
-              <DollarSign className="h-8 w-8 text-warning-600" />
-            </div>
-          </div>
-
           <div className="bg-secondary-50 p-4 rounded-lg">
             <div className="flex items-center justify-between">
               <div>
@@ -204,9 +198,6 @@ export const DamageCartModal: React.FC<DamageCartModalProps> = ({
                   <th className="text-left py-3 px-4 text-sm font-medium text-secondary-600 border-r border-secondary-200 min-w-[100px]">
                     Severidade
                   </th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-secondary-600 border-r border-secondary-200 min-w-[120px]">
-                    Custo Est. (R$)
-                  </th>
                   <th className="text-left py-3 px-4 text-sm font-medium text-secondary-600 border-r border-secondary-200 min-w-[100px]">
                     Requer Reparo
                   </th>
@@ -228,7 +219,15 @@ export const DamageCartModal: React.FC<DamageCartModalProps> = ({
                         onChange={(e) => updateDamage(damage.id, 'location', e.target.value)}
                         className="w-full border-0 bg-transparent focus:outline-none focus:ring-2 focus:ring-primary-500 rounded px-2 py-1"
                         placeholder="Ex: Porta dianteira esquerda"
+                        list="location-suggestions"
                       />
+                      {index === 0 && (
+                        <datalist id="location-suggestions">
+                          {locationOptions.map((loc) => (
+                            <option key={loc} value={loc} />
+                          ))}
+                        </datalist>
+                      )}
                     </td>
                     <td className="py-2 px-2 border-r border-secondary-200">
                       <textarea
@@ -260,17 +259,6 @@ export const DamageCartModal: React.FC<DamageCartModalProps> = ({
                           <option key={severity} value={severity}>{severity}</option>
                         ))}
                       </select>
-                    </td>
-                    <td className="py-2 px-2 border-r border-secondary-200">
-                      <input
-                        type="number"
-                        value={damage.estimated_cost || 0}
-                        onChange={(e) => updateDamage(damage.id, 'estimated_cost', Number(e.target.value) || 0)}
-                        className="w-full border-0 bg-transparent focus:outline-none focus:ring-2 focus:ring-primary-500 rounded px-2 py-1"
-                        step="0.01"
-                        min="0"
-                        placeholder="0,00"
-                      />
                     </td>
                     <td className="py-2 px-4 border-r border-secondary-200 text-center">
                       <input

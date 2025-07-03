@@ -1,5 +1,5 @@
 import React from 'react';
-import { Camera, AlertTriangle, FileText, MapPin, Wrench } from 'lucide-react';
+import { Camera, AlertTriangle, FileText, MapPin, Wrench, Trash2 } from 'lucide-react';
 import { Button } from '../UI/Button';
 import { Badge } from '../UI/Badge';
 
@@ -19,6 +19,8 @@ interface DamageCartSummaryProps {
   contractId?: string;
   onOpenDamageCart: () => void;
   damageCart?: DamageItem[];
+  onRemoveDamage?: (damageId: string) => void;
+  onUpdateCart?: (damages: DamageItem[]) => void;
 }
 
 export const DamageCartSummary: React.FC<DamageCartSummaryProps> = ({
@@ -26,7 +28,9 @@ export const DamageCartSummary: React.FC<DamageCartSummaryProps> = ({
   inspectionType,
   contractId,
   onOpenDamageCart,
-  damageCart = []
+  damageCart = [],
+  onRemoveDamage,
+  onUpdateCart
 }) => {
   const getSeverityBadge = (severity: string) => {
     const variants = {
@@ -40,6 +44,22 @@ export const DamageCartSummary: React.FC<DamageCartSummaryProps> = ({
 
   const getDamageTypeBadge = (damageType: string) => {
     return <Badge variant="info">{damageType}</Badge>;
+  };
+
+  const handleRemoveDamage = (damageId: string) => {
+    if (onRemoveDamage) {
+      onRemoveDamage(damageId);
+    } else if (onUpdateCart && damageCart) {
+      // Fallback: update cart by removing the item
+      const updatedCart = damageCart.filter(damage => damage.id !== damageId);
+      onUpdateCart(updatedCart);
+    }
+  };
+
+  const handleClearAll = () => {
+    if (onUpdateCart) {
+      onUpdateCart([]);
+    }
   };
 
   return (
@@ -64,10 +84,24 @@ export const DamageCartSummary: React.FC<DamageCartSummaryProps> = ({
         <div className="space-y-4">
           {/* Lista de danos */}
           <div className="bg-secondary-50 p-4 rounded-lg">
-            <h4 className="font-medium text-secondary-900 mb-3 flex items-center">
-              <MapPin className="h-4 w-4 mr-2" />
-              Danos no Carrinho ({damageCart.length})
-            </h4>
+            <div className="flex justify-between items-center mb-3">
+              <h4 className="font-medium text-secondary-900 flex items-center">
+                <MapPin className="h-4 w-4 mr-2" />
+                Danos no Carrinho ({damageCart.length})
+              </h4>
+              {damageCart.length > 0 && (onUpdateCart || onRemoveDamage) && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleClearAll}
+                  className="text-error-600 hover:text-error-700"
+                >
+                  <Trash2 className="h-3 w-3 mr-1" />
+                  Limpar Tudo
+                </Button>
+              )}
+            </div>
             
             {damageCart.length > 0 ? (
               <div className="space-y-3">
@@ -82,12 +116,24 @@ export const DamageCartSummary: React.FC<DamageCartSummaryProps> = ({
                         </div>
                         <p className="text-xs text-secondary-600">{damage.description}</p>
                       </div>
-                      {damage.requires_repair && (
-                        <div className="flex items-center text-xs text-warning-600 ml-2">
-                          <Wrench className="h-3 w-3 mr-1" />
-                          Reparo
-                        </div>
-                      )}
+                      <div className="flex items-center gap-2 ml-2">
+                        {damage.requires_repair && (
+                          <div className="flex items-center text-xs text-warning-600">
+                            <Wrench className="h-3 w-3 mr-1" />
+                            Reparo
+                          </div>
+                        )}
+                        {(onUpdateCart || onRemoveDamage) && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveDamage(damage.id)}
+                            className="p-1 text-error-400 hover:text-error-600 hover:bg-error-50 rounded transition-colors"
+                            title="Remover dano"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                     
                     {damage.photo_url && (

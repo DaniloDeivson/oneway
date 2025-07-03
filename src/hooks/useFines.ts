@@ -153,11 +153,90 @@ export const useFines = () => {
     }
   };
 
-  const createFine = async (fineData: Omit<FineInsert, 'tenant_id'>) => {
+  // Test function to verify basic insert capability
+  const testBasicInsert = async () => {
     try {
+      console.log('Testing basic insert...');
+      const testData = {
+        vehicle_id: 'test-vehicle-id',
+        employee_id: 'test-employee-id',
+        infraction_type: 'Teste',
+        amount: 100.00,
+        infraction_date: '2024-01-01',
+        due_date: '2024-01-31',
+        status: 'Pendente' as const,
+        tenant_id: DEFAULT_TENANT_ID
+      };
+      
       const { data, error } = await supabase
         .from('fines')
+        .insert([testData])
+        .select('*')
+        .single();
+        
+      if (error) {
+        console.error('Test insert failed:', error);
+        return { success: false, error };
+      }
+      
+      console.log('Test insert successful:', data);
+      
+      // Clean up test data
+      await supabase.from('fines').delete().eq('id', data.id);
+      
+      return { success: true, data };
+    } catch (err) {
+      console.error('Test insert exception:', err);
+      return { success: false, error: err };
+    }
+  };
+
+  const createFine = async (fineData: Omit<FineInsert, 'tenant_id'>) => {
+    try {
+      console.log('Creating fine with data:', fineData);
+      
+      // Validate required fields before sending to Supabase
+      const requiredFields = ['vehicle_id', 'employee_id', 'infraction_type', 'amount', 'infraction_date', 'due_date'];
+      const missingFields = requiredFields.filter(field => !fineData[field as keyof typeof fineData]);
+      
+      if (missingFields.length > 0) {
+        const error = `Missing required fields: ${missingFields.join(', ')}`;
+        console.error(error);
+        throw new Error(error);
+      }
+      
+      // Validate data types
+      if (typeof fineData.amount !== 'number' || fineData.amount <= 0) {
+        throw new Error('Amount must be a positive number');
+      }
+      
+      if (fineData.points !== undefined && fineData.points !== null && (typeof fineData.points !== 'number' || fineData.points < 0)) {
+        throw new Error('Points must be a non-negative number');
+      }
+      
+      // First, try to insert without complex select to isolate the issue
+      const { data: insertedData, error: insertError } = await supabase
+        .from('fines')
         .insert([{ ...fineData, tenant_id: DEFAULT_TENANT_ID }])
+        .select('*')
+        .single();
+
+      if (insertError) {
+        console.error('Insert error:', insertError);
+        console.error('Insert error details:', {
+          message: insertError.message,
+          details: insertError.details,
+          hint: insertError.hint,
+          code: insertError.code
+        });
+        throw insertError;
+      }
+      
+      console.log('Fine inserted successfully:', insertedData);
+      
+      // Now try to get the full data with relationships
+      const { data: fullData, error: selectError } = await supabase
+        .from('fines')
         .select(`
           *,
           vehicles (
@@ -182,28 +261,84 @@ export const useFines = () => {
             name
           )
         `)
+        .eq('id', insertedData.id)
         .single();
 
-      if (error) throw error;
+      if (selectError) {
+        console.error('Select error:', selectError);
+        // Even if select fails, we still have the inserted data
+        setFines(prev => [insertedData, ...prev]);
+        await fetchStatistics();
+        toast.success('Multa registrada com sucesso!');
+        return insertedData;
+      }
       
       // Associate with contract if applicable
-      const enhancedFine = await associateFinesWithContracts([data]);
+      const enhancedFine = await associateFinesWithContracts([fullData]);
       setFines(prev => [enhancedFine[0], ...prev]);
       await fetchStatistics();
       toast.success('Multa registrada com sucesso!');
       return enhancedFine[0];
     } catch (err) {
-      toast.error('Erro ao criar multa: ' + (err instanceof Error ? err.message : 'Erro desconhecido'));
+      console.error('Full error details:', err);
+      
+      // More detailed error handling
+      if (err && typeof err === 'object' && 'message' in err) {
+        const errorMessage = (err as any).message;
+        if (errorMessage.includes('duplicate key')) {
+          toast.error('Erro: Multa com esse número já existe.');
+        } else if (errorMessage.includes('foreign key')) {
+          toast.error('Erro: Veículo, funcionário ou motorista não encontrado.');
+        } else if (errorMessage.includes('check constraint')) {
+          toast.error('Erro: Dados inválidos. Verifique os valores inseridos.');
+        } else if (errorMessage.includes('not null')) {
+          toast.error('Erro: Campos obrigatórios não preenchidos.');
+        } else {
+          toast.error('Erro ao criar multa: ' + errorMessage);
+        }
+      } else {
+        toast.error('Erro ao criar multa: ' + (err instanceof Error ? err.message : 'Erro desconhecido'));
+      }
+      
       throw new Error(err instanceof Error ? err.message : 'Failed to create fine');
     }
   };
 
   const updateFine = async (id: string, updates: FineUpdate) => {
     try {
-      const { data, error } = await supabase
+      console.log('Updating fine with id:', id);
+      console.log('Update data:', updates);
+      
+      // Validate that we have an ID
+      if (!id || id === '') {
+        throw new Error('ID da multa é obrigatório para atualização');
+      }
+      
+      // First, try to update without complex select to isolate the issue
+      const { data: updatedData, error: updateError } = await supabase
         .from('fines')
         .update({ ...updates, updated_at: new Date().toISOString() })
         .eq('id', id)
+        .eq('tenant_id', DEFAULT_TENANT_ID) // Add tenant_id check for security
+        .select('*')
+        .single();
+
+      if (updateError) {
+        console.error('Update error:', updateError);
+        console.error('Update error details:', {
+          message: updateError.message,
+          details: updateError.details,
+          hint: updateError.hint,
+          code: updateError.code
+        });
+        throw updateError;
+      }
+      
+      console.log('Fine updated successfully:', updatedData);
+      
+      // Now try to get the full data with relationships
+      const { data: fullData, error: selectError } = await supabase
+        .from('fines')
         .select(`
           *,
           vehicles (
@@ -228,35 +363,120 @@ export const useFines = () => {
             name
           )
         `)
+        .eq('id', id)
         .single();
 
-      if (error) throw error;
+      if (selectError) {
+        console.error('Select error after update:', selectError);
+        // Even if select fails, we still have the updated data
+        setFines(prev => prev.map(f => f.id === id ? updatedData : f));
+        await fetchStatistics();
+        toast.success('Multa atualizada com sucesso!');
+        return updatedData;
+      }
       
       // Associate with contract if applicable
-      const enhancedFine = await associateFinesWithContracts([data]);
+      const enhancedFine = await associateFinesWithContracts([fullData]);
       setFines(prev => prev.map(f => f.id === id ? enhancedFine[0] : f));
       await fetchStatistics();
       toast.success('Multa atualizada com sucesso!');
       return enhancedFine[0];
     } catch (err) {
-      toast.error('Erro ao atualizar multa: ' + (err instanceof Error ? err.message : 'Erro desconhecido'));
+      console.error('Full update error details:', err);
+      
+      // More detailed error handling
+      if (err && typeof err === 'object' && 'message' in err) {
+        const errorMessage = (err as any).message;
+        if (errorMessage.includes('duplicate key')) {
+          toast.error('Erro: Multa com esse número já existe.');
+        } else if (errorMessage.includes('foreign key')) {
+          toast.error('Erro: Veículo, funcionário ou motorista não encontrado.');
+        } else if (errorMessage.includes('check constraint')) {
+          toast.error('Erro: Dados inválidos. Verifique os valores inseridos.');
+        } else if (errorMessage.includes('not null')) {
+          toast.error('Erro: Campos obrigatórios não preenchidos.');
+        } else if (errorMessage.includes('No rows')) {
+          toast.error('Erro: Multa não encontrada ou sem permissão para editar.');
+        } else {
+          toast.error('Erro ao atualizar multa: ' + errorMessage);
+        }
+      } else {
+        toast.error('Erro ao atualizar multa: ' + (err instanceof Error ? err.message : 'Erro desconhecido'));
+      }
+      
       throw new Error(err instanceof Error ? err.message : 'Failed to update fine');
     }
   };
 
   const deleteFine = async (id: string) => {
     try {
-      const { error } = await supabase
+      console.log('Deleting fine with id:', id);
+      
+      // Validate that we have an ID
+      if (!id || id === '') {
+        throw new Error('ID da multa é obrigatório para exclusão');
+      }
+      
+      // First check if the fine exists and belongs to this tenant
+      const { data: existingFine, error: checkError } = await supabase
+        .from('fines')
+        .select('id, tenant_id')
+        .eq('id', id)
+        .eq('tenant_id', DEFAULT_TENANT_ID)
+        .single();
+        
+      if (checkError) {
+        console.error('Error checking fine existence:', checkError);
+        if (checkError.code === 'PGRST116') {
+          throw new Error('Multa não encontrada ou sem permissão para excluir.');
+        }
+        throw checkError;
+      }
+      
+      if (!existingFine) {
+        throw new Error('Multa não encontrada ou sem permissão para excluir.');
+      }
+      
+      console.log('Fine exists, proceeding with deletion:', existingFine);
+      
+      const { error: deleteError } = await supabase
         .from('fines')
         .delete()
-        .eq('id', id);
+        .eq('id', id)
+        .eq('tenant_id', DEFAULT_TENANT_ID); // Add tenant_id check for security
 
-      if (error) throw error;
+      if (deleteError) {
+        console.error('Delete error:', deleteError);
+        console.error('Delete error details:', {
+          message: deleteError.message,
+          details: deleteError.details,
+          hint: deleteError.hint,
+          code: deleteError.code
+        });
+        throw deleteError;
+      }
+      
+      console.log('Fine deleted successfully');
       setFines(prev => prev.filter(f => f.id !== id));
       await fetchStatistics();
       toast.success('Multa excluída com sucesso!');
     } catch (err) {
-      toast.error('Erro ao excluir multa: ' + (err instanceof Error ? err.message : 'Erro desconhecido'));
+      console.error('Full delete error details:', err);
+      
+      // More detailed error handling
+      if (err && typeof err === 'object' && 'message' in err) {
+        const errorMessage = (err as any).message;
+        if (errorMessage.includes('foreign key')) {
+          toast.error('Erro: Não é possível excluir multa que possui dependências.');
+        } else if (errorMessage.includes('permission')) {
+          toast.error('Erro: Sem permissão para excluir esta multa.');
+        } else {
+          toast.error('Erro ao excluir multa: ' + errorMessage);
+        }
+      } else {
+        toast.error('Erro ao excluir multa: ' + (err instanceof Error ? err.message : 'Erro desconhecido'));
+      }
+      
       throw new Error(err instanceof Error ? err.message : 'Failed to delete fine');
     }
   };

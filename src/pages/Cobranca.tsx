@@ -3,54 +3,185 @@ import { Card, CardHeader, CardContent } from '../components/UI/Card';
 import { Button } from '../components/UI/Button';
 import { Badge } from '../components/UI/Badge';
 import { useContracts } from '../hooks/useContracts';
-import { useVehicles } from '../hooks/useVehicles';
 import { useCustomers } from '../hooks/useCustomers';
+import { useCustomerCharges } from '../hooks/useCustomerCharges';
 import { useAuth } from '../hooks/useAuth';
 import { 
   Plus, 
   Search, 
-  DollarSign, 
   Car, 
   User, 
   Loader2, 
-  AlertTriangle, 
   CheckCircle, 
   Clock, 
   Receipt,
-  Download,
   Eye,
-  CreditCard
+  RefreshCw,
+  Zap,
+  DollarSign,
+  X,
+  Calendar,
+  FileText
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { supabase } from '../lib/supabase';
 
-// Interface para cobranças de clientes
-interface CustomerCharge {
+interface Customer {
   id: string;
-  contract_id: string;
-  customer_id: string;
-  customer_name: string;
-  vehicle_id: string;
-  vehicle_plate: string;
-  vehicle_model: string;
-  charge_type: 'Dano' | 'Excesso KM' | 'Combustível' | 'Diária Extra';
-  description: string;
-  amount: number;
-  status: 'Pendente' | 'Pago' | 'Autorizado' | 'Contestado';
-  charge_date: string;
-  due_date: string;
-  created_at: string;
-  updated_at: string;
+  name: string;
 }
+
+interface Contract {
+  id: string;
+  customer_id: string;
+  vehicle_id: string;
+  vehicles?: {
+    plate: string;
+    model: string;
+  };
+}
+
+// Modal para visualizar detalhes da cobrança
+const ViewChargeModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  charge: any | null;
+}> = ({ isOpen, onClose, charge }) => {
+  if (!isOpen || !charge) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-xl font-semibold text-secondary-900">Detalhes da Cobrança</h2>
+          <button 
+            onClick={onClose}
+            className="p-2 hover:bg-gray-100 rounded-lg"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="space-y-6">
+          {/* Informações Básicas */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-secondary-600 mb-1">Cliente</label>
+              <p className="text-lg font-semibold text-secondary-900">{charge.customers?.name}</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-secondary-600 mb-1">Veículo</label>
+              <p className="text-lg font-semibold text-secondary-900">
+                {charge.vehicles?.plate || charge.contracts?.vehicles?.plate} - {charge.vehicles?.model || charge.contracts?.vehicles?.model}
+              </p>
+            </div>
+          </div>
+
+          {/* Tipo e Status */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-secondary-600 mb-1">Tipo de Cobrança</label>
+              <div className="flex items-center space-x-2">
+                <Badge variant={
+                  charge.charge_type === 'Dano' ? 'error' :
+                  charge.charge_type === 'Excesso KM' ? 'warning' :
+                  charge.charge_type === 'Combustível' ? 'info' : 'secondary'
+                }>
+                  {charge.charge_type}
+                </Badge>
+                {charge.generated_from === 'Automatic' && (
+                  <Badge variant="info" className="text-xs">Automática</Badge>
+                )}
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-secondary-600 mb-1">Status</label>
+              <Badge variant={
+                charge.status === 'Pendente' ? 'warning' :
+                charge.status === 'Pago' ? 'success' :
+                charge.status === 'Autorizado' ? 'info' : 'error'
+              }>
+                {charge.status}
+              </Badge>
+            </div>
+          </div>
+
+          {/* Valores e Datas */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-secondary-600 mb-1">Valor</label>
+              <p className="text-2xl font-bold text-secondary-900">
+                R$ {charge.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-secondary-600 mb-1">Vencimento</label>
+              <div className="flex items-center space-x-2">
+                <Calendar className="h-4 w-4 text-secondary-400" />
+                <p className="text-lg text-secondary-900">
+                  {new Date(charge.due_date).toLocaleDateString('pt-BR')}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Descrição */}
+          {charge.description && (
+            <div>
+              <label className="block text-sm font-medium text-secondary-600 mb-1">Descrição</label>
+              <div className="flex items-start space-x-2">
+                <FileText className="h-4 w-4 text-secondary-400 mt-1 flex-shrink-0" />
+                <p className="text-secondary-900">{charge.description}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Informações Adicionais */}
+          <div className="bg-secondary-50 rounded-lg p-4">
+            <h3 className="font-medium text-secondary-900 mb-2">Informações Adicionais</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+              <div>
+                <span className="text-secondary-600">Data de Criação:</span>
+                <span className="ml-2 text-secondary-900">
+                  {new Date(charge.created_at).toLocaleDateString('pt-BR')}
+                </span>
+              </div>
+              <div>
+                <span className="text-secondary-600">Origem:</span>
+                <span className="ml-2 text-secondary-900">
+                  {charge.generated_from === 'Automatic' ? 'Gerada Automaticamente' : 'Criada Manualmente'}
+                </span>
+              </div>
+              {charge.source_cost_ids && charge.source_cost_ids.length > 0 && (
+                <div className="md:col-span-2">
+                  <span className="text-secondary-600">Custos Relacionados:</span>
+                  <span className="ml-2 text-secondary-900">
+                    {charge.source_cost_ids.length} custo(s) associado(s)
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex justify-end mt-6">
+          <Button variant="secondary" onClick={onClose}>
+            Fechar
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // Adicionar componente de modal para nova cobrança
 const NewChargeModal: React.FC<{
   isOpen: boolean;
   onClose: () => void;
-  customers: any[];
-  contracts: any[];
+  customers: Customer[];
+  contracts: Contract[];
   onChargeCreated: () => void;
 }> = ({ isOpen, onClose, customers, contracts, onChargeCreated }) => {
+  const { createCharge } = useCustomerCharges();
   const [formData, setFormData] = useState({
     customer_id: '',
     contract_id: '',
@@ -74,7 +205,7 @@ const NewChargeModal: React.FC<{
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
     try {
@@ -84,18 +215,20 @@ const NewChargeModal: React.FC<{
         setLoading(false);
         return;
       }
-      // Inserir cobrança no banco
-      const { error } = await supabase.from('customer_charges').insert({
+      
+      // Criar cobrança usando o hook
+      await createCharge({
         customer_id: formData.customer_id,
         contract_id: formData.contract_id,
         vehicle_id: formData.vehicle_id,
-        charge_type: formData.charge_type,
+        charge_type: formData.charge_type as 'Dano' | 'Excesso KM' | 'Combustível' | 'Diária Extra',
         description: formData.description,
         amount: Number(formData.amount),
         due_date: formData.due_date,
-        status: formData.status,
+        status: formData.status as 'Pendente' | 'Pago' | 'Autorizado' | 'Contestado',
+        generated_from: 'Manual'
       });
-      if (error) throw error;
+      
       toast.success('Cobrança criada com sucesso!');
       setFormData({
         customer_id: '',
@@ -110,7 +243,7 @@ const NewChargeModal: React.FC<{
       onChargeCreated();
       onClose();
     } catch (err) {
-      toast.error('Erro ao criar cobrança.');
+      toast.error('Erro ao criar cobrança: ' + (err instanceof Error ? err.message : 'Erro desconhecido'));
     } finally {
       setLoading(false);
     }
@@ -173,7 +306,9 @@ const NewChargeModal: React.FC<{
           </div>
           <div className="flex justify-end mt-6">
             <Button variant="secondary" onClick={onClose} type="button" disabled={loading}>Cancelar</Button>
-            <Button type="submit" className="ml-2" loading={loading}>Salvar</Button>
+            <Button type="submit" className="ml-2" disabled={loading}>
+              {loading ? 'Salvando...' : 'Salvar'}
+            </Button>
           </div>
         </form>
       </div>
@@ -185,62 +320,73 @@ const NewChargeModal: React.FC<{
 export const Cobranca = () => {
   const { contracts, loading: contractsLoading } = useContracts();
   const { customers } = useCustomers();
+  const { charges, loading, generateChargesFromCosts, getChargeStatistics, markAsPaid, refetch } = useCustomerCharges();
   const { isAdmin, isManager } = useAuth();
   
   const [searchTerm, setSearchTerm] = useState('');
   const [chargeTypeFilter, setChargeTypeFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [customerFilter, setCustomerFilter] = useState('');
-  const [customerCharges, setCustomerCharges] = useState<CustomerCharge[]>([]);
-  const [loading, setLoading] = useState(true);
   const [isNewChargeModalOpen, setIsNewChargeModalOpen] = useState(false);
+  const [isViewChargeModalOpen, setIsViewChargeModalOpen] = useState(false);
+  const [selectedCharge, setSelectedCharge] = useState<any | null>(null);
+  const [statistics, setStatistics] = useState({
+    total_charges: 0,
+    pending_charges: 0,
+    paid_charges: 0,
+    total_amount: 0,
+    pending_amount: 0,
+    paid_amount: 0
+  });
+  const [generatingCharges, setGeneratingCharges] = useState(false);
 
-  // Buscar cobranças reais do banco
-  const fetchCharges = async () => {
-    setLoading(true);
-    const { data, error } = await supabase
-      .from('customer_charges')
-      .select(`*, customers (name), contracts (vehicles (plate, model))`)
-      .order('created_at', { ascending: false });
-    if (!error && data) {
-      // Adaptar para o formato CustomerCharge
-      const realCharges: CustomerCharge[] = data.map((charge: any) => ({
-        id: charge.id,
-        contract_id: charge.contract_id,
-        customer_id: charge.customer_id,
-        customer_name: charge.customers?.name || '',
-        vehicle_id: charge.vehicle_id,
-        vehicle_plate: charge.contracts?.vehicles?.plate || '',
-        vehicle_model: charge.contracts?.vehicles?.model || '',
-        charge_type: charge.charge_type,
-        description: charge.description,
-        amount: charge.amount,
-        status: charge.status,
-        charge_date: charge.created_at?.split('T')[0] || '',
-        due_date: charge.due_date,
-        created_at: charge.created_at,
-        updated_at: charge.updated_at,
-      }));
-      setCustomerCharges(realCharges);
-    }
-    setLoading(false);
-  };
-
+  // Buscar estatísticas
   useEffect(() => {
-    fetchCharges();
-  }, [customers]);
+    const fetchStats = async () => {
+      try {
+        const stats = await getChargeStatistics();
+        setStatistics(stats);
+      } catch {
+        // Silently fail if the function doesn't exist yet
+        console.log('Statistics function not available yet');
+      }
+    };
+    fetchStats();
+  }, [charges]);
 
   // Função para abrir modal de nova cobrança
   const handleNewCharge = () => {
     setIsNewChargeModalOpen(true);
   };
 
+  // Função para gerar cobranças automaticamente
+  const handleGenerateCharges = async () => {
+    if (!isAdmin && !isManager) {
+      toast.error('Apenas administradores e gerentes podem gerar cobranças automaticamente.');
+      return;
+    }
+
+    setGeneratingCharges(true);
+    try {
+      const result = await generateChargesFromCosts();
+      if (result.charges_generated > 0) {
+        toast.success(`${result.charges_generated} cobrança(s) gerada(s) totalizando R$ ${result.total_amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`);
+      } else {
+        toast.success('Nenhuma nova cobrança foi gerada. Todos os custos já possuem cobranças correspondentes.');
+      }
+    } catch (error) {
+      toast.error('Erro ao gerar cobranças: ' + (error instanceof Error ? error.message : 'Erro desconhecido'));
+    } finally {
+      setGeneratingCharges(false);
+    }
+  };
+
   // Aplicar filtros
-  const filteredCharges = customerCharges.filter((charge: CustomerCharge) => {
+  const filteredCharges = charges.filter(charge => {
     const matchesSearch = 
       charge.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      charge.vehicle_plate?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      charge.customer_name?.toLowerCase().includes(searchTerm.toLowerCase());
+      charge.vehicles?.plate?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      charge.customers?.name?.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesChargeType = chargeTypeFilter === '' || charge.charge_type === chargeTypeFilter;
     const matchesStatus = statusFilter === '' || charge.status === statusFilter;
@@ -248,14 +394,6 @@ export const Cobranca = () => {
     
     return matchesSearch && matchesChargeType && matchesStatus && matchesCustomer;
   });
-
-  // Estatísticas
-  const totalCharges = filteredCharges.length;
-  const pendingCharges = filteredCharges.filter(c => c.status === 'Pendente').length;
-  const paidCharges = filteredCharges.filter(c => c.status === 'Pago').length;
-  const totalAmount = filteredCharges.reduce((sum, c) => sum + c.amount, 0);
-  const pendingAmount = filteredCharges.filter(c => c.status === 'Pendente').reduce((sum, c) => sum + c.amount, 0);
-  const paidAmount = filteredCharges.filter(c => c.status === 'Pago').reduce((sum, c) => sum + c.amount, 0);
 
   const getStatusBadge = (status: string) => {
     const variants = {
@@ -281,7 +419,34 @@ export const Cobranca = () => {
 
   // Atualizar lista após criar cobrança
   const handleChargeCreated = async () => {
-    await fetchCharges();
+    await refetch();
+  };
+
+  // Função para visualizar cobrança
+  const handleViewCharge = (charge: any) => {
+    setSelectedCharge(charge);
+    setIsViewChargeModalOpen(true);
+  };
+
+  // Função melhorada para marcar como pago
+  const handleMarkAsPaid = async (chargeId: string) => {
+    try {
+      await markAsPaid(chargeId);
+      toast.success('Cobrança marcada como paga com sucesso!');
+      // Atualizar estatísticas após marcar como pago
+      const fetchStats = async () => {
+        try {
+          const stats = await getChargeStatistics();
+          setStatistics(stats);
+        } catch {
+          console.log('Erro ao atualizar estatísticas');
+        }
+      };
+      fetchStats();
+    } catch (error) {
+      console.error('Erro ao marcar como paga:', error);
+      toast.error('Erro ao marcar como paga: ' + (error instanceof Error ? error.message : 'Erro desconhecido'));
+    }
   };
 
   if (loading || contractsLoading) {
@@ -302,13 +467,37 @@ export const Cobranca = () => {
         contracts={contracts} 
         onChargeCreated={handleChargeCreated}
       />
+      
+      {/* Modal de Visualização de Cobrança */}
+      <ViewChargeModal 
+        isOpen={isViewChargeModalOpen} 
+        onClose={() => setIsViewChargeModalOpen(false)} 
+        charge={selectedCharge}
+      />
+      
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl lg:text-3xl font-bold text-secondary-900">Cobrança de Clientes</h1>
-          <p className="text-secondary-600 mt-1 lg:mt-2">Gerencie cobranças para clientes: danos, excesso de KM, combustível e diárias extras</p>
+          <p className="text-secondary-600 mt-1 lg:mt-2">Gerencie cobranças automáticas baseadas nos custos: danos, excesso de KM, combustível e diárias extras</p>
         </div>
         <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3 w-full sm:w-auto">
+          {(isAdmin || isManager) && (
+            <Button 
+              variant="success" 
+              size="sm" 
+              className="w-full sm:w-auto"
+              onClick={handleGenerateCharges}
+              disabled={generatingCharges}
+            >
+              {generatingCharges ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Zap className="h-4 w-4 mr-2" />
+              )}
+              Gerar Cobranças
+            </Button>
+          )}
           <Button 
             variant="primary" 
             size="sm" 
@@ -318,21 +507,21 @@ export const Cobranca = () => {
             <Plus className="h-4 w-4 mr-2" />
             Nova Cobrança
           </Button>
-          <Button variant="secondary" size="sm" className="w-full sm:w-auto">
-            <Download className="h-4 w-4 mr-2" />
-            Exportar
+          <Button variant="secondary" size="sm" className="w-full sm:w-auto" onClick={refetch}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Atualizar
           </Button>
         </div>
       </div>
 
       {/* Statistics Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 lg:gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 lg:gap-4">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-secondary-600 text-xs lg:text-sm font-medium">Total de Cobranças</p>
-                <p className="text-xl lg:text-2xl font-bold text-secondary-900">{totalCharges}</p>
+                <p className="text-xl lg:text-2xl font-bold text-secondary-900">{statistics.total_charges}</p>
               </div>
               <div className="h-8 w-8 lg:h-12 lg:w-12 bg-primary-100 rounded-lg flex items-center justify-center">
                 <Receipt className="h-4 w-4 lg:h-6 lg:w-6 text-primary-600" />
@@ -346,7 +535,7 @@ export const Cobranca = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-secondary-600 text-xs lg:text-sm font-medium">Pendentes</p>
-                <p className="text-xl lg:text-2xl font-bold text-secondary-900">{pendingCharges}</p>
+                <p className="text-xl lg:text-2xl font-bold text-secondary-900">{statistics.pending_charges}</p>
                 <p className="text-xs text-warning-600 mt-1">Aguardando</p>
               </div>
               <div className="h-8 w-8 lg:h-12 lg:w-12 bg-warning-100 rounded-lg flex items-center justify-center">
@@ -361,7 +550,7 @@ export const Cobranca = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-secondary-600 text-xs lg:text-sm font-medium">Pagas</p>
-                <p className="text-xl lg:text-2xl font-bold text-secondary-900">{paidCharges}</p>
+                <p className="text-xl lg:text-2xl font-bold text-secondary-900">{statistics.paid_charges}</p>
                 <p className="text-xs text-success-600 mt-1">Quitadas</p>
               </div>
               <div className="h-8 w-8 lg:h-12 lg:w-12 bg-success-100 rounded-lg flex items-center justify-center">
@@ -375,13 +564,13 @@ export const Cobranca = () => {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-secondary-600 text-xs lg:text-sm font-medium">Valor Pendente</p>
-                <p className="text-lg lg:text-xl font-bold text-warning-700">
-                  R$ {pendingAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                <p className="text-secondary-600 text-xs lg:text-sm font-medium">Total a Cobrar</p>
+                <p className="text-lg lg:text-xl font-bold text-secondary-900">
+                  R$ {statistics.total_amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </p>
               </div>
-              <div className="h-8 w-8 lg:h-12 lg:w-12 bg-warning-100 rounded-lg flex items-center justify-center">
-                <DollarSign className="h-4 w-4 lg:h-6 lg:w-6 text-warning-600" />
+              <div className="h-8 w-8 lg:h-12 lg:w-12 bg-error-100 rounded-lg flex items-center justify-center">
+                <DollarSign className="h-4 w-4 lg:h-6 lg:w-6 text-error-600" />
               </div>
             </div>
           </CardContent>
@@ -391,18 +580,53 @@ export const Cobranca = () => {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-secondary-600 text-xs lg:text-sm font-medium">Valor Recebido</p>
-                <p className="text-lg lg:text-xl font-bold text-success-700">
-                  R$ {paidAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                <p className="text-secondary-600 text-xs lg:text-sm font-medium">Pendente</p>
+                <p className="text-lg lg:text-xl font-bold text-warning-600">
+                  R$ {statistics.pending_amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </p>
+              </div>
+              <div className="h-8 w-8 lg:h-12 lg:w-12 bg-warning-100 rounded-lg flex items-center justify-center">
+                <Clock className="h-4 w-4 lg:h-6 lg:w-6 text-warning-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-secondary-600 text-xs lg:text-sm font-medium">Recebido</p>
+                <p className="text-lg lg:text-xl font-bold text-success-600">
+                  R$ {statistics.paid_amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </p>
               </div>
               <div className="h-8 w-8 lg:h-12 lg:w-12 bg-success-100 rounded-lg flex items-center justify-center">
-                <CreditCard className="h-4 w-4 lg:h-6 lg:w-6 text-success-600" />
+                <CheckCircle className="h-4 w-4 lg:h-6 lg:w-6 text-success-600" />
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
+
+      {/* Alert de instrução para gerar cobranças */}
+      {charges.length === 0 && (
+        <Card className="border-info-200 bg-info-50">
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-3">
+              <Zap className="h-5 w-5 text-info-600 flex-shrink-0" />
+              <div>
+                <p className="text-info-800 font-medium">
+                  Nenhuma cobrança encontrada
+                </p>
+                <p className="text-info-700 text-sm mt-1">
+                  Clique em "Gerar Cobranças" para criar cobranças automaticamente baseadas nos custos autorizados dos contratos (danos, excesso de KM, combustível e diárias extras).
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Filters */}
       <Card>
@@ -443,6 +667,16 @@ export const Cobranca = () => {
                 <option value="Autorizado">Autorizado</option>
                 <option value="Contestado">Contestado</option>
               </select>
+              <select
+                value={customerFilter}
+                onChange={(e) => setCustomerFilter(e.target.value)}
+                className="border border-secondary-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
+              >
+                <option value="">Todos os Clientes</option>
+                {customers.map(customer => (
+                  <option key={customer.id} value={customer.id}>{customer.name}</option>
+                ))}
+              </select>
             </div>
           </div>
         </CardContent>
@@ -462,8 +696,8 @@ export const Cobranca = () => {
               <div key={charge.id} className="border border-secondary-200 rounded-lg p-4">
                 <div className="flex justify-between items-start mb-3">
                   <div>
-                    <p className="font-medium text-secondary-900">{charge.customer_name}</p>
-                    <p className="text-sm text-secondary-600">{charge.vehicle_plate} - {charge.vehicle_model}</p>
+                    <p className="font-medium text-secondary-900">{charge.customers?.name}</p>
+                    <p className="text-sm text-secondary-600">{charge.vehicles?.plate || charge.contracts?.vehicles?.plate} - {charge.vehicles?.model || charge.contracts?.vehicles?.model}</p>
                   </div>
                   <div className="flex flex-col space-y-1">
                     {getChargeTypeBadge(charge.charge_type)}
@@ -473,6 +707,9 @@ export const Cobranca = () => {
                 
                 <div className="mb-3">
                   <p className="text-sm text-secondary-700">{charge.description}</p>
+                  {charge.generated_from === 'Automatic' && (
+                    <Badge variant="info" className="text-xs mt-1">Automática</Badge>
+                  )}
                 </div>
                 
                 <div className="flex justify-between items-center">
@@ -485,7 +722,20 @@ export const Cobranca = () => {
                     </p>
                   </div>
                   <div className="flex space-x-2">
-                    <button className="p-2 text-secondary-400 hover:text-secondary-600">
+                    {charge.status === 'Pendente' && (
+                      <Button 
+                        size="sm" 
+                        onClick={() => handleMarkAsPaid(charge.id)}
+                        className="text-xs"
+                      >
+                        Marcar Pago
+                      </Button>
+                    )}
+                    <button 
+                      className="p-2 text-secondary-400 hover:text-secondary-600"
+                      onClick={() => handleViewCharge(charge)}
+                      title="Ver detalhes da cobrança"
+                    >
                       <Eye className="h-4 w-4" />
                     </button>
                   </div>
@@ -518,7 +768,7 @@ export const Cobranca = () => {
                           <User className="h-4 w-4 text-primary-600" />
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-secondary-900">{charge.customer_name}</p>
+                          <p className="text-sm font-medium text-secondary-900">{charge.customers?.name}</p>
                         </div>
                       </div>
                     </td>
@@ -526,16 +776,21 @@ export const Cobranca = () => {
                       <div className="flex items-center">
                         <Car className="h-4 w-4 text-secondary-400 mr-2" />
                         <div>
-                          <p className="text-sm font-medium text-secondary-900">{charge.vehicle_plate}</p>
-                          <p className="text-xs text-secondary-500">{charge.vehicle_model}</p>
+                          <p className="text-sm font-medium text-secondary-900">{charge.vehicles?.plate || charge.contracts?.vehicles?.plate}</p>
+                          <p className="text-xs text-secondary-500">{charge.vehicles?.model || charge.contracts?.vehicles?.model}</p>
                         </div>
                       </div>
                     </td>
                     <td className="py-4 px-6">
-                      {getChargeTypeBadge(charge.charge_type)}
+                      <div className="flex flex-col space-y-1">
+                        {getChargeTypeBadge(charge.charge_type)}
+                        {charge.generated_from === 'Automatic' && (
+                          <Badge variant="info" className="text-xs">Automática</Badge>
+                        )}
+                      </div>
                     </td>
                     <td className="py-4 px-6">
-                      <p className="text-sm text-secondary-600 max-w-xs truncate" title={charge.description}>
+                      <p className="text-sm text-secondary-700 max-w-xs truncate" title={charge.description || ''}>
                         {charge.description}
                       </p>
                     </td>
@@ -545,7 +800,7 @@ export const Cobranca = () => {
                       </p>
                     </td>
                     <td className="py-4 px-6">
-                      <p className="text-sm text-secondary-600">
+                      <p className="text-sm text-secondary-700">
                         {new Date(charge.due_date).toLocaleDateString('pt-BR')}
                       </p>
                     </td>
@@ -554,9 +809,19 @@ export const Cobranca = () => {
                     </td>
                     <td className="py-4 px-6">
                       <div className="flex items-center space-x-2">
+                        {charge.status === 'Pendente' && (
+                          <Button 
+                            size="sm" 
+                            onClick={() => handleMarkAsPaid(charge.id)}
+                            className="text-xs"
+                          >
+                            Marcar Pago
+                          </Button>
+                        )}
                         <button 
-                          className="p-1 text-secondary-400 hover:text-secondary-600"
-                          title="Visualizar detalhes"
+                          className="p-2 text-secondary-400 hover:text-secondary-600"
+                          onClick={() => handleViewCharge(charge)}
+                          title="Ver detalhes da cobrança"
                         >
                           <Eye className="h-4 w-4" />
                         </button>
@@ -568,17 +833,16 @@ export const Cobranca = () => {
             </table>
           </div>
 
-          {filteredCharges.length === 0 && (
-            <div className="text-center py-12">
+          {filteredCharges.length === 0 && charges.length > 0 && (
+            <div className="text-center py-8">
               <Receipt className="h-12 w-12 text-secondary-400 mx-auto mb-4" />
-              <p className="text-secondary-600">Nenhuma cobrança encontrada</p>
-              <p className="text-sm text-secondary-500 mt-1">
-                Ajuste os filtros ou crie uma nova cobrança
-              </p>
+              <p className="text-secondary-600">Nenhuma cobrança encontrada com os filtros aplicados</p>
             </div>
           )}
         </CardContent>
       </Card>
+
+      
     </div>
   );
 };

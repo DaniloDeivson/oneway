@@ -70,21 +70,44 @@ export const useEmployees = () => {
 
   const deleteEmployee = async (id: string) => {
     try {
+      console.log('deleteEmployee called with id:', id);
+      
+      // Validate that we have an ID
+      if (!id || id === '') {
+        throw new Error('ID do funcionário é obrigatório para exclusão');
+      }
+      
       // First, check if this is a critical admin user
-      const { data: employeeData } = await supabase
+      console.log('Checking employee data...');
+      const { data: employeeData, error: fetchError } = await supabase
         .from('employees')
-        .select('role, contact_info')
+        .select('role, contact_info, name')
         .eq('id', id)
+        .eq('tenant_id', DEFAULT_TENANT_ID)
         .single();
+      
+      if (fetchError) {
+        console.error('Error fetching employee data:', fetchError);
+        throw new Error('Funcionário não encontrado');
+      }
+      
+      console.log('Employee data:', employeeData);
       
       // Prevent deletion of the last admin user
       if (employeeData?.role === 'Admin') {
-        const { data: adminCount } = await supabase
+        console.log('Employee is admin, checking admin count...');
+        const { data: adminCount, error: countError } = await supabase
           .from('employees')
           .select('id', { count: 'exact' })
           .eq('role', 'Admin')
-          .eq('active', true);
+          .eq('active', true)
+          .eq('tenant_id', DEFAULT_TENANT_ID);
         
+        if (countError) {
+          console.error('Error counting admins:', countError);
+        }
+        
+        console.log('Active admin count:', adminCount?.length || 0);
         if ((adminCount?.length || 0) <= 1) {
           throw new Error('Não é possível excluir o último administrador do sistema');
         }
@@ -96,26 +119,52 @@ export const useEmployees = () => {
       }
       
       // Try to delete the employee
-      const { error } = await supabase
+      console.log('Attempting to delete employee...');
+      const { error: deleteError } = await supabase
         .from('employees')
         .delete()
-        .eq('id', id);
+        .eq('id', id)
+        .eq('tenant_id', DEFAULT_TENANT_ID);
 
-      if (error) {
+      if (deleteError) {
+        console.error('Delete error:', deleteError);
+        console.error('Delete error details:', {
+          message: deleteError.message,
+          details: deleteError.details,
+          hint: deleteError.hint,
+          code: deleteError.code
+        });
+        
         // If deletion fails due to foreign key constraints, deactivate instead
-        if (error.code === '23503') { // Foreign key violation
+        if (deleteError.code === '23503') { // Foreign key violation
+          console.log('Foreign key violation, deactivating instead...');
           await updateEmployee(id, { active: false });
           toast.success('Funcionário desativado com sucesso (não foi possível excluir devido a referências no sistema)');
-          setEmployees(prev => prev.map(e => e.id === id ? { ...e, active: false } : e));
           return;
         }
-        throw error;
+        throw deleteError;
       }
       
+      console.log('Employee deleted successfully');
       setEmployees(prev => prev.filter(e => e.id !== id));
       toast.success('Funcionário excluído com sucesso!');
     } catch (err) {
-      toast.error('Erro ao excluir funcionário: ' + (err instanceof Error ? err.message : 'Erro desconhecido'));
+      console.error('Full delete error details:', err);
+      
+      // More detailed error handling
+      if (err && typeof err === 'object' && 'message' in err) {
+        const errorMessage = (err as any).message;
+        if (errorMessage.includes('foreign key')) {
+          toast.error('Erro: Não é possível excluir funcionário que possui dependências no sistema.');
+        } else if (errorMessage.includes('permission')) {
+          toast.error('Erro: Sem permissão para excluir este funcionário.');
+        } else {
+          toast.error('Erro ao excluir funcionário: ' + errorMessage);
+        }
+      } else {
+        toast.error('Erro ao excluir funcionário: ' + (err instanceof Error ? err.message : 'Erro desconhecido'));
+      }
+      
       throw new Error(err instanceof Error ? err.message : 'Failed to delete employee');
     }
   };

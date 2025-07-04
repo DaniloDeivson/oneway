@@ -17,8 +17,8 @@ RUN apk add --no-cache \
 # Copiar arquivos de dependências
 COPY package*.json ./
 
-# Configurar npm para produção
-RUN npm ci --only=production --silent
+# Instalar todas as dependências (incluindo dev para build)
+RUN npm ci --silent
 
 # Copiar código fonte
 COPY . .

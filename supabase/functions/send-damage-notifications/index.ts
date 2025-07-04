@@ -204,9 +204,6 @@ async function sendEmail(emailData: any): Promise<boolean> {
     // - AWS SES
     // - Mailgun
     
-    console.log('📧 Sending email:', emailData.subject)
-    console.log('📧 To:', emailData.to)
-    
     // For demo purposes, we'll simulate email sending
     // In production, replace this with actual email service integration
     
@@ -234,7 +231,6 @@ async function sendEmail(emailData: any): Promise<boolean> {
     return true
     
   } catch (error) {
-    console.error('❌ Error sending email:', error)
     return false
   }
 }

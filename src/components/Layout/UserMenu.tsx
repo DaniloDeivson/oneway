@@ -54,7 +54,7 @@ export const UserMenu: React.FC = () => {
       </button>
 
       {isOpen && (
-        <div className="absolute bottom-full right-0 mb-2 w-48 bg-white rounded-md shadow-xl py-1 z-[9999] border border-gray-200 overflow-hidden" style={{ maxWidth: '240px' }}>
+        <div className="absolute top-full right-0 mt-2 w-48 bg-white rounded-md shadow-xl py-1 z-[9999] border border-gray-200 overflow-hidden" style={{ maxWidth: '240px' }}>
           <div className="px-3 py-2 border-b border-secondary-200">
             <p className="text-sm font-medium text-secondary-900 truncate">{user.name}</p>
             <p className="text-xs text-secondary-500 truncate">{user.email}</p>

@@ -1,7 +1,7 @@
 version: '3.8'
 
 networks:
-  traefik:
+  dokploy-network:
     external: true
   oneway-network:
     driver: bridge
@@ -41,7 +41,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - traefik-certificates:/letsencrypt
     networks:
-      - traefik
+      - dokploy-network
       - oneway-network
     labels:
       - "traefik.enable=true"
@@ -54,14 +54,14 @@ services:
       context: .
       dockerfile: Dockerfile
       target: production
-    container_name: oneway-rent-car
+    container_name: oneway-onewayrentacar-zqftoi
     restart: unless-stopped
     environment:
       - NODE_ENV=production
       - VITE_SUPABASE_URL=${VITE_SUPABASE_URL:-https://bdcqaeppqnwixhumfsso.supabase.co}
       - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJkY3FhZXBwcW53aXhodW1mc3NvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTEyMTM0MTcsImV4cCI6MjA2Njc4OTQxN30.p0BSXUgjstOMOuli_Ko7Kf8Z-T7fb5ozp9qWr-tK_tc}
     networks:
-      - traefik
+      - dokploy-network
       - oneway-network
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]

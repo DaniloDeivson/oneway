@@ -28,16 +28,22 @@ RUN ls -la /app/dist/
 # Production stage
 FROM nginx:alpine AS production
 
-# Copy built files to nginx
+# Garante que o diretório de destino existe
+RUN mkdir -p /usr/share/nginx/html
+
+# Copia os arquivos do build
 COPY --from=build /app/dist /usr/share/nginx/html
 
-# Copy nginx configuration
+# Copia a configuração customizada do nginx
 COPY nginx.conf /etc/nginx/nginx.conf
 
-# Create a simple test file
+# Garante permissões corretas
+RUN chmod -R 755 /usr/share/nginx/html
+
+# Cria um arquivo de teste
 RUN echo '<!DOCTYPE html><html><head><title>Test</title></head><body><h1>Nginx Test OK</h1></body></html>' > /usr/share/nginx/html/test.html
 
-# List contents for debugging
+# Lista o conteúdo para debug
 RUN ls -la /usr/share/nginx/html/
 
 EXPOSE 80

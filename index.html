@@ -2,7 +2,7 @@
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>OneWay Rent A Car - Gestão de Frota</title>
     <meta name="description" content="Sistema completo de gestão para locadora de veículos" />
@@ -15,9 +15,10 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
     <!-- Favicon -->
+    <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+    <link rel="icon" type="image/svg+xml" href="/vite.svg">
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
     
     <!-- PWA Meta Tags -->
     <meta name="theme-color" content="#1e40af">
@@ -30,6 +31,40 @@
     <meta property="og:description" content="Sistema completo de gestão para locadora de veículos">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://oneway-rent-a-car.netlify.app">
+    
+    <!-- Web3 Extension Protection -->
+    <script>
+      // Prevent Web3 extensions from interfering with the app
+      if (typeof window !== 'undefined') {
+        // Block common Web3 injections that can cause mobile errors
+        const blockWeb3Extensions = () => {
+          try {
+            delete window.ethereum;
+            delete window.web3;
+            delete window.solana;
+            delete window.exodus;
+            delete window.mises;
+            // Prevent extension scripts from running
+            Object.defineProperty(window, 'ethereum', {
+              value: undefined,
+              writable: false,
+              configurable: false
+            });
+            Object.defineProperty(window, 'web3', {
+              value: undefined,
+              writable: false,
+              configurable: false
+            });
+          } catch (e) {
+            // Ignore errors if properties can't be deleted
+          }
+        };
+        
+        // Run immediately and after DOM loads
+        blockWeb3Extensions();
+        document.addEventListener('DOMContentLoaded', blockWeb3Extensions);
+      }
+    </script>
     
     <!-- Session Debug Script -->
     <script>

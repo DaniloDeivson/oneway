@@ -1,51 +1,93 @@
-# Build stage
+# ============================================
+# DOCKERFILE DE PRODUÇÃO - ONEWAY RENT A CAR
+# ============================================
+
+# Stage 1: Build da aplicação
 FROM node:18-alpine AS build
 
+# Definir diretório de trabalho
 WORKDIR /app
 
-# Copy package files
+# Instalar dependências do sistema necessárias
+RUN apk add --no-cache \
+    curl \
+    wget \
+    git
+
+# Copiar arquivos de dependências
 COPY package*.json ./
 
-# Install all dependencies
-RUN npm ci
+# Instalar todas as dependências (incluindo dev para build)
+RUN npm ci --silent
 
-# Copy source code
+# Copiar código fonte
 COPY . .
 
-# Set environment variables for Supabase
-ENV VITE_SUPABASE_URL=https://bdcqaeppqnwixhumfsso.supabase.co
-ENV VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJkY3FhZXBwcW53aXhodW1mc3NvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTEyMTM0MTcsImV4cCI6MjA2Njc4OTQxN30.p0BSXUgjstOMOuli_Ko7Kf8Z-T7fb5ozp9qWr-tK_tc
+# Build arguments para ambiente
+ARG VITE_SUPABASE_URL
+ARG VITE_SUPABASE_ANON_KEY
+ARG NODE_ENV=production
 
-# Set executable permissions for node_modules binaries
-RUN chmod +x node_modules/.bin/*
+# Definir variáveis de ambiente de build
+ENV NODE_ENV=$NODE_ENV
+ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
+ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
 
-# Build the application using npx to ensure proper execution
-RUN npx vite build
+# Build da aplicação otimizada para produção
+RUN npm run build
 
-# List contents of dist directory for debugging
-RUN ls -la /app/dist/
+# Verificar se o build foi bem-sucedido
+RUN test -d dist && echo "✅ Build successful" || (echo "❌ Build failed" && exit 1)
 
-# Production stage
-FROM nginx:alpine AS production
+# Stage 2: Nginx de produção
+FROM nginx:1.25-alpine AS production
 
-# Garante que o diretório de destino existe
-RUN mkdir -p /usr/share/nginx/html
+# Instalar dependências necessárias
+RUN apk add --no-cache \
+    curl \
+    wget \
+    tzdata \
+    ca-certificates
 
-# Copia os arquivos do build
-COPY --from=build /app/dist /usr/share/nginx/html
+# Configurar timezone
+ENV TZ=America/Sao_Paulo
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
-# Copia a configuração customizada do nginx
-COPY nginx.production.conf /etc/nginx/nginx.conf
+# Criar usuário não-root para segurança
+RUN addgroup -g 1001 -S nginx-user && \
+    adduser -S -D -H -u 1001 -h /var/cache/nginx -s /sbin/nologin -G nginx-user -g nginx-user nginx-user
 
-# Garante permissões corretas
-RUN chmod -R 755 /usr/share/nginx/html
+# Configurar diretórios
+RUN mkdir -p /usr/share/nginx/html /var/log/nginx /etc/nginx/conf.d
 
-# Cria um arquivo de teste
-RUN echo '<!DOCTYPE html><html><head><title>Test</title></head><body><h1>Nginx Test OK</h1></body></html>' > /usr/share/nginx/html/test.html
+# Copiar arquivos do build
+COPY --from=build --chown=nginx-user:nginx-user /app/dist /usr/share/nginx/html
 
-# Lista o conteúdo para debug
-RUN ls -la /usr/share/nginx/html/
+# Copiar configuração nginx otimizada
+COPY --chown=nginx-user:nginx-user nginx.conf /etc/nginx/nginx.conf
 
+# Criar arquivo de health check
+RUN echo '{"status":"ok","app":"oneway-rent-car","timestamp":"'$(date -Iseconds)'"}' > /usr/share/nginx/html/health.json
+
+# Configurar permissões de segurança
+RUN chown -R nginx-user:nginx-user /usr/share/nginx/html /var/log/nginx /etc/nginx && \
+    chmod -R 755 /usr/share/nginx/html && \
+    chmod 644 /etc/nginx/nginx.conf
+
+# Health check endpoint
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost/health || exit 1
+
+# Expor porta
 EXPOSE 80
 
-CMD ["nginx", "-g", "daemon off;"]
+# Labels para identificação
+LABEL maintainer="OneWay Rent A Car"
+LABEL version="1.0"
+LABEL description="Sistema de Gestão para Locadora de Veículos"
+
+# Executar como usuário não-root
+USER nginx-user
+
+# Comando de inicialização
+CMD ["nginx", "-g", "daemon off;"] 

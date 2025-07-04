@@ -93,7 +93,7 @@ export const useFinance = () => {
       if (error) throw error;
       setSalaries(data || []);
     } catch (err) {
-      console.error('Error fetching salaries:', err);
+      // Error handling for salaries
     }
   };
 
@@ -108,7 +108,7 @@ export const useFinance = () => {
       if (error) throw error;
       setRecurringExpenses(data || []);
     } catch (err) {
-      console.error('Error fetching recurring expenses:', err);
+      // Error handling for recurring expenses
     }
   };
 

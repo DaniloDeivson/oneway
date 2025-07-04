@@ -107,16 +107,8 @@ export const FineForm: React.FC<FineFormProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    console.log('=== FORM SUBMIT DEBUG ===');
-    console.log('Raw formData:', formData);
-    console.log('User:', user);
-    console.log('Vehicles:', vehicles);
-    console.log('Drivers:', drivers);
-    console.log('Employees:', employees);
-    
     // Validações obrigatórias
     if (!formData.vehicle_id || formData.vehicle_id === '') {
-      console.error('Validation failed: vehicle_id is empty');
       alert('Por favor, selecione um veículo.');
       return;
     }
@@ -125,40 +117,33 @@ export const FineForm: React.FC<FineFormProps> = ({
     let employeeId = formData.employee_id;
     if (!employeeId && user) {
       employeeId = user.id;
-      console.log('Using user.id as employeeId fallback:', employeeId);
     }
     if (!employeeId || employeeId === '') {
-      console.error('Validation failed: employee_id is empty');
       alert('Por favor, selecione um responsável pelo lançamento da multa.');
       return;
     }
     
     if (!formData.infraction_type || formData.infraction_type === '') {
-      console.error('Validation failed: infraction_type is empty');
       alert('Por favor, selecione o tipo de infração.');
       return;
     }
     
     if (!formData.amount || isNaN(Number(formData.amount)) || Number(formData.amount) <= 0) {
-      console.error('Validation failed: amount is invalid:', formData.amount);
       alert('Por favor, informe um valor válido para a multa.');
       return;
     }
     
     if (!formData.infraction_date || formData.infraction_date === '') {
-      console.error('Validation failed: infraction_date is empty');
       alert('Por favor, informe a data da infração.');
       return;
     }
     
     if (!formData.severity || formData.severity === '') {
-      console.error('Validation failed: severity is empty');
       alert('Por favor, selecione a gravidade da infração.');
       return;
     }
     
     if (formData.points === undefined || formData.points === null || isNaN(Number(formData.points)) || Number(formData.points) < 0) {
-      console.error('Validation failed: points is invalid:', formData.points);
       alert('Por favor, informe a pontuação da infração.');
       return;
     }
@@ -169,7 +154,6 @@ export const FineForm: React.FC<FineFormProps> = ({
       const infractionDate = new Date(formData.infraction_date);
       infractionDate.setDate(infractionDate.getDate() + 30);
       calculatedDueDate = infractionDate.toISOString().split('T')[0];
-      console.log('Calculated due_date:', calculatedDueDate);
     }
 
     // Nunca envie string vazia para campos opcionais, use null
@@ -192,21 +176,9 @@ export const FineForm: React.FC<FineFormProps> = ({
       points: Number(formData.points)
     };
     
-    console.log('=== FINAL SUBMIT DATA ===');
-    console.log('submitData:', submitData);
-    console.log('Data types check:');
-    console.log('- vehicle_id:', typeof submitData.vehicle_id, submitData.vehicle_id);
-    console.log('- employee_id:', typeof submitData.employee_id, submitData.employee_id);
-    console.log('- amount:', typeof submitData.amount, submitData.amount);
-    console.log('- points:', typeof submitData.points, submitData.points);
-    console.log('- infraction_date:', typeof submitData.infraction_date, submitData.infraction_date);
-    console.log('- due_date:', typeof submitData.due_date, submitData.due_date);
-    
     try {
       await onSubmit(submitData);
     } catch (error) {
-      console.error('Error submitting fine:', error);
-      console.error('Data that caused error:', submitData);
       alert('Erro ao salvar multa. Verifique os dados e tente novamente.');
     }
   };

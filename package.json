@@ -6,11 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "build:debug": "vite build --mode development",
-    "build:check": "vite build && ls -la dist/",
     "lint": "eslint .",
-    "preview": "vite preview",
-    "test": "echo 'Testing login functionality...' && npm run dev"
+    "preview": "vite preview"
   },
   "dependencies": {
     "@headlessui/react": "^1.7.19",

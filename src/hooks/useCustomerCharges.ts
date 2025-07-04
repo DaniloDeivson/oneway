@@ -40,13 +40,12 @@ export const useCustomerCharges = () => {
         .order('created_at', { ascending: false });
 
       if (error) {
-        // Check if it's a table not found error
-        if (error.code === 'PGRST106' || error.message.includes('relation "customer_charges" does not exist')) {
-          console.log('Customer charges table not found - database migration needed');
-          setCharges([]);
-          setError('Database migration needed. Please execute the customer charges SQL migration.');
-          return;
-        }
+              // Check if it's a table not found error
+      if (error.code === 'PGRST106' || error.message.includes('relation "customer_charges" does not exist')) {
+        setCharges([]);
+        setError('Database migration needed. Please execute the customer charges SQL migration.');
+        return;
+      }
         throw error;
       }
 

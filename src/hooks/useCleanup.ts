@@ -66,7 +66,6 @@ export const useCleanup = () => {
       
       return count || 0;
     } catch (error) {
-      console.error(`Error cleaning up ${tableName}:`, error);
       return 0;
     }
   };

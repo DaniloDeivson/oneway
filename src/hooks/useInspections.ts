@@ -71,8 +71,6 @@ export const useInspections = () => {
       setLoading(true);
       setError(null);
       
-      console.log('Fetching inspections...');
-      
       const { data, error } = await supabase
         .from('inspections')
         .select(`
@@ -90,14 +88,11 @@ export const useInspections = () => {
         .order('inspected_at', { ascending: false });
 
       if (error) {
-        console.error('Error fetching inspections:', error);
         throw error;
       }
       
-      console.log('Inspections fetched:', data?.length || 0);
       setInspections(data || []);
     } catch (err) {
-      console.error('Error in fetchInspections:', err);
       setError(err instanceof Error ? err.message : 'An error occurred');
       toast.error('Erro ao carregar inspeções: ' + (err instanceof Error ? err.message : 'Erro desconhecido'));
     } finally {
@@ -119,14 +114,12 @@ export const useInspections = () => {
         setStatistics(data[0]);
       }
     } catch (err) {
-      console.error('Error fetching inspection statistics:', err);
+      // Error handling for statistics
     }
   };
 
   const createInspection = async (inspectionData: Omit<InspectionInsert, 'tenant_id'>, damages?: Omit<InspectionItem, 'id' | 'inspection_id'>[]) => {
     try {
-      console.log('Creating inspection with data:', inspectionData);
-      
       const { data: newInspection, error } = await supabase
         .from('inspections')
         .insert([{ ...inspectionData, tenant_id: DEFAULT_TENANT_ID }])
@@ -135,10 +128,7 @@ export const useInspections = () => {
         
       if (error) throw error;
       
-      console.log('Inspection created:', newInspection);
-      
       if (damages && damages.length > 0) {
-        console.log('Adding damages:', damages);
         const inspectionItems = damages.map(damage => ({
           ...damage,
           inspection_id: newInspection.id
@@ -147,7 +137,7 @@ export const useInspections = () => {
           .from('inspection_items')
           .insert(inspectionItems);
         if (itemsError) {
-          console.error('Error creating inspection items:', itemsError);
+          throw itemsError;
         }
       }
       
@@ -160,7 +150,6 @@ export const useInspections = () => {
       await fetchStatistics();
       return newInspection;
     } catch (err) {
-      console.error('Full error in createInspection:', err);
       toast.error('Erro ao criar inspeção: ' + (err instanceof Error ? err.message : 'Erro desconhecido'));
       throw new Error(err instanceof Error ? err.message : 'Failed to create inspection');
     }

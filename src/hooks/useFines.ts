@@ -193,7 +193,6 @@ export const useFines = () => {
 
   const createFine = async (fineData: Omit<FineInsert, 'tenant_id'>) => {
     try {
-      console.log('Creating fine with data:', fineData);
       
       // Validate required fields before sending to Supabase
       const requiredFields = ['vehicle_id', 'employee_id', 'infraction_type', 'amount', 'infraction_date', 'due_date'];
@@ -201,7 +200,6 @@ export const useFines = () => {
       
       if (missingFields.length > 0) {
         const error = `Missing required fields: ${missingFields.join(', ')}`;
-        console.error(error);
         throw new Error(error);
       }
       
@@ -222,17 +220,8 @@ export const useFines = () => {
         .single();
 
       if (insertError) {
-        console.error('Insert error:', insertError);
-        console.error('Insert error details:', {
-          message: insertError.message,
-          details: insertError.details,
-          hint: insertError.hint,
-          code: insertError.code
-        });
         throw insertError;
       }
-      
-      console.log('Fine inserted successfully:', insertedData);
       
       // Now try to get the full data with relationships
       const { data: fullData, error: selectError } = await supabase
@@ -280,8 +269,6 @@ export const useFines = () => {
       toast.success('Multa registrada com sucesso!');
       return enhancedFine[0];
     } catch (err) {
-      console.error('Full error details:', err);
-      
       // More detailed error handling
       if (err && typeof err === 'object' && 'message' in err) {
         const errorMessage = (err as any).message;

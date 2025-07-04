@@ -117,7 +117,7 @@ export const useContracts = () => {
         setStatistics(data[0]);
       }
     } catch (err) {
-      console.error('Error fetching statistics:', err);
+      // Error handling for statistics
     }
   };
 
@@ -134,7 +134,6 @@ export const useContracts = () => {
       if (error) throw error;
       return data || [];
     } catch (err) {
-      console.error('Error fetching available vehicles:', err);
       return [];
     }
   };
@@ -479,7 +478,6 @@ export const useContracts = () => {
       if (error) throw error;
       return data || 0;
     } catch (err) {
-      console.error('Error calculating contract total:', err);
       return 0;
     }
   };
@@ -492,7 +490,6 @@ export const useContracts = () => {
       if (error) throw error;
       return data || 0;
     } catch (err) {
-      console.error('Error calculating contract paid amount:', err);
       return 0;
     }
   };

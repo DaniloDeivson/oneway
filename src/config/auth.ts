@@ -45,8 +45,6 @@ export const saveLastLogin = (rememberMe: boolean = false): void => {
   localStorage.setItem(AUTH_CONFIG.STORAGE_KEYS.LAST_LOGIN, new Date().toISOString());
   localStorage.setItem(AUTH_CONFIG.STORAGE_KEYS.REMEMBER_ME, rememberMe.toString());
   localStorage.setItem(AUTH_CONFIG.STORAGE_KEYS.SESSION_PERSISTENT, 'true');
-  
-  console.log('💾 Session saved with remember me:', rememberMe);
 };
 
 export const clearSession = (): void => {
@@ -55,8 +53,6 @@ export const clearSession = (): void => {
   localStorage.removeItem(AUTH_CONFIG.STORAGE_KEYS.REDIRECT_PATH);
   localStorage.removeItem(AUTH_CONFIG.STORAGE_KEYS.REMEMBER_ME);
   localStorage.removeItem(AUTH_CONFIG.STORAGE_KEYS.SESSION_PERSISTENT);
-  
-  console.log('🧹 Session cleared from localStorage');
 };
 
 export const shouldRememberUser = (): boolean => {

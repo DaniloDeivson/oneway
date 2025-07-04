@@ -33,8 +33,6 @@ export const useCosts = () => {
 
       // If view doesn't exist or fails, query the table directly
       if (error || !data) {
-        console.log('View query failed, trying direct table query:', error);
-        
         const { data: directData, error: directError } = await supabase
           .from('costs')
           .select(`
@@ -75,7 +73,6 @@ export const useCosts = () => {
       setCosts(data || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
-      console.error('Error fetching costs:', err);
     } finally {
       setLoading(false);
     }
@@ -83,8 +80,6 @@ export const useCosts = () => {
 
   const createCost = async (costData: Omit<CostInsert, 'tenant_id'>) => {
     try {
-      console.log('🔍 DEBUG: Full costData received:', costData);
-      
       // Step 1: Try with ONLY the absolutely minimal required fields
       const minimalData = {
         tenant_id: DEFAULT_TENANT_ID,
@@ -94,8 +89,6 @@ export const useCosts = () => {
         amount: costData.amount,
         cost_date: costData.cost_date
       };
-      
-      console.log('🔍 DEBUG: Trying minimal data first:', minimalData);
 
       let { data, error } = await supabase
         .from('costs')
@@ -104,14 +97,6 @@ export const useCosts = () => {
         .single();
 
       if (error) {
-        console.error('❌ ERROR with minimal data:', error);
-        console.log('🔍 Detailed error:', {
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code
-        });
-        
         // If even minimal data fails, it's a schema/constraint issue
         if (error.message.includes('check constraint') || error.message.includes('violates')) {
           throw new Error(`Schema error - Execute SQL migration! Error: ${error.message}`);
@@ -120,20 +105,14 @@ export const useCosts = () => {
         throw error;
       }
       
-      console.log('✅ SUCCESS with minimal data:', data);
-      
       // Step 2: If minimal works, try adding optional fields one by one
       if (data) {
-        console.log('🔍 Minimal insert worked, now testing optional fields...');
-        
         // Test with status and origin
         const withBasicOptional = {
           ...minimalData,
           status: costData.status || 'Pendente',
           origin: costData.origin || 'Manual'
         };
-        
-        console.log('🔍 Testing with status and origin:', withBasicOptional);
         
         // Delete the test record first
         await supabase.from('costs').delete().eq('id', data.id);
@@ -145,11 +124,8 @@ export const useCosts = () => {
           .single();
           
         if (error2) {
-          console.error('❌ ERROR with status/origin:', error2);
           throw new Error(`Status/Origin error: ${error2.message}`);
         }
-        
-        console.log('✅ SUCCESS with status/origin');
         
         // Clean up and proceed with full data
         await supabase.from('costs').delete().eq('id', data2.id);
@@ -161,7 +137,7 @@ export const useCosts = () => {
         tenant_id: DEFAULT_TENANT_ID
       };
       
-      console.log('🔍 Now trying full data:', fullData);
+
       
       const { data: finalData, error: finalError } = await supabase
         .from('costs')
@@ -176,17 +152,13 @@ export const useCosts = () => {
         .single();
 
       if (finalError) {
-        console.error('❌ ERROR with full data:', finalError);
         throw finalError;
       }
-      
-      console.log('✅ SUCCESS with full data:', finalData);
       
       // Refresh the list to get the updated view data
       await fetchCosts();
       return finalData;
     } catch (err) {
-      console.error('🚨 FULL ERROR in createCost:', err);
       throw new Error(err instanceof Error ? err.message : 'Failed to create cost');
     }
   };
@@ -239,7 +211,6 @@ export const useCosts = () => {
       if (error) throw error;
       return data?.[0] || null;
     } catch (err) {
-      console.error('Error fetching cost statistics:', err);
       return null;
     }
   };
@@ -250,10 +221,8 @@ export const useCosts = () => {
         .rpc('fn_debug_automatic_costs', { p_tenant_id: DEFAULT_TENANT_ID });
 
       if (error) throw error;
-      console.log('Automatic costs debug:', data);
       return data || [];
     } catch (err) {
-      console.error('Error debugging automatic costs:', err);
       return [];
     }
   };
@@ -265,11 +234,9 @@ export const useCosts = () => {
 
       if (error) throw error;
       
-      console.log(`Reprocessed ${data} inspection costs`);
       await fetchCosts(); // Refresh after reprocessing
       return data;
     } catch (err) {
-      console.error('Error reprocessing inspection costs:', err);
       throw new Error(err instanceof Error ? err.message : 'Failed to reprocess costs');
     }
   };
@@ -320,7 +287,6 @@ export const useCosts = () => {
 
       return data || [];
     } catch (err) {
-      console.error('Error fetching billing costs:', err);
       return [];
     }
   };
@@ -341,7 +307,6 @@ export const useCosts = () => {
       
       return data?.[0] || { generated_count: 0, total_amount: 0 };
     } catch (err) {
-      console.error('Error generating billing costs:', err);
       throw new Error(err instanceof Error ? err.message : 'Failed to generate billing costs');
     }
   };
@@ -355,7 +320,6 @@ export const useCosts = () => {
       if (error) throw error;
       return data?.[0] || null;
     } catch (err) {
-      console.error('Error fetching billing statistics:', err);
       return null;
     }
   };
@@ -379,7 +343,6 @@ export const useCosts = () => {
       await fetchCosts();
       return data;
     } catch (err) {
-      console.error('Error marking cost as paid:', err);
       throw new Error(err instanceof Error ? err.message : 'Failed to mark cost as paid');
     }
   };

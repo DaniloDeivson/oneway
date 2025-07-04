@@ -53,7 +53,18 @@ export const useAuth = () => {
       .select('*')
       .eq('contact_info->>email', supabaseUser.email)
       .single();
-    if (error || !data) return null;
+    if (error || !data) {
+      toast.error('Usuário autenticado, mas não encontrado na tabela de funcionários. Contate o administrador.');
+      return null;
+    }
+    if (!data.role) {
+      toast.error('Usuário sem papel (role) definido. Contate o administrador.');
+      return null;
+    }
+    if (!data.permissions) {
+      toast.error('Usuário sem permissões definidas. Contate o administrador.');
+      return null;
+    }
     return {
       id: data.id,
       email: data.contact_info?.email || supabaseUser.email,

@@ -759,8 +759,21 @@ export const Fleet: React.FC = () => {
     }
   };
 
+  // Função para inativar veículo
+  const inactivateVehicle = async (id: string) => {
+    if (confirm('Tem certeza que deseja inativar este veículo?')) {
+      try {
+        await updateVehicle(id, { status: 'Inativo' });
+        toast.success('Veículo inativado com sucesso!');
+      } catch (error) {
+        toast.error('Erro ao inativar veículo');
+      }
+    }
+  };
+
   // Aplicar filtros e ordenação
   const filteredAndSortedVehicles = vehiclesWithCosts
+    .filter(vehicle => vehicle.status !== 'Inativo')
     .filter(vehicle => {
       const matchesSearch = 
         vehicle.plate.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -851,17 +864,6 @@ export const Fleet: React.FC = () => {
     } catch (error) {
       console.error('Erro ao salvar veículo:', error);
       throw error;
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    if (confirm('Tem certeza que deseja excluir este veículo?')) {
-      try {
-        await deleteVehicle(id);
-        toast.success('Veículo excluído com sucesso!');
-      } catch (error) {
-        toast.error('Erro ao excluir veículo');
-      }
     }
   };
 
@@ -1080,12 +1082,15 @@ export const Fleet: React.FC = () => {
                   >
                     <Edit className="h-4 w-4" />
                   </button>
-                  <button 
-                    onClick={() => handleDelete(vehicle.id)}
-                    className="p-2 text-secondary-400 hover:text-error-600"
+                  <Button
+                    onClick={() => inactivateVehicle(vehicle.id)}
+                    variant="secondary"
+                    size="icon"
+                    className="p-1 text-secondary-400 hover:text-warning-600"
+                    title="Inativar veículo"
                   >
                     <Trash2 className="h-4 w-4" />
-                  </button>
+                  </Button>
                 </div>
               </div>
             ))}
@@ -1231,12 +1236,15 @@ export const Fleet: React.FC = () => {
                         >
                           <Edit className="h-4 w-4" />
                         </button>
-                        <button 
-                          onClick={() => handleDelete(vehicle.id)}
-                          className="p-1 text-secondary-400 hover:text-error-600"
+                        <Button
+                          onClick={() => inactivateVehicle(vehicle.id)}
+                          variant="secondary"
+                          size="icon"
+                          className="p-1 text-secondary-400 hover:text-warning-600"
+                          title="Inativar veículo"
                         >
                           <Trash2 className="h-4 w-4" />
-                        </button>
+                        </Button>
                       </div>
                     </td>
                   </tr>

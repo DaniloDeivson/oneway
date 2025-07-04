@@ -59,7 +59,7 @@ export const useEmployees = () => {
     try {
       const { data, error } = await supabase
         .from('employees')
-        .update({ ...updates, updated_at: new Date().toISOString() })
+        .update({ ...updates, permissions: updates.permissions ?? undefined, updated_at: new Date().toISOString() })
         .eq('id', id)
         .select()
         .single();

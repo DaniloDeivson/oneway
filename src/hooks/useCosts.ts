@@ -60,6 +60,7 @@ export const useCosts = () => {
           ...cost,
           vehicle_plate: cost.vehicles?.plate,
           vehicle_model: cost.vehicles?.model,
+          customer_name: cost.customers?.name,
           created_by_name: 'Sistema', // Default for direct query
           created_by_role: 'Sistema',
           origin_description: cost.origin === 'Patio' ? 'Controle de Pátio' : 

@@ -5,9 +5,6 @@ import { useAuth } from '../../hooks/useAuth';
 import { useVehicles } from '../../hooks/useVehicles';
 import { useContracts } from '../../hooks/useContracts';
 import { MultipleVehicleSelector } from './MultipleVehicleSelector';
-import { Database } from '../../types/database';
-
-type Vehicle = Database['public']['Tables']['vehicles']['Row'];
 
 interface AvailableVehicle {
   id: string;
@@ -38,6 +35,7 @@ interface ContractVehicleData {
 }
 
 interface ContractFormData {
+  name: string;
   customer_id: string;
   vehicle_id: string;
   start_date: string;
@@ -100,6 +98,7 @@ export const ContractForm: React.FC<ContractFormProps> = ({
   });
 
   const [formData, setFormData] = useState<ContractFormData>({
+    name: contract?.name || '',
     customer_id: contract?.customer_id || '',
     vehicle_id: contract?.vehicle_id || '',
     start_date: contract?.start_date || '',
@@ -200,9 +199,16 @@ export const ContractForm: React.FC<ContractFormProps> = ({
       }
     }
 
+    if (!formData.name.trim()) {
+      alert('O nome do contrato é obrigatório.');
+      return;
+    }
+
     const submitData: ContractFormData = {
       ...formData,
-      vehicles: useMultipleVehicles ? selectedVehicles : undefined
+      vehicles: useMultipleVehicles
+        ? selectedVehicles
+        : (formData.vehicle_id ? [{ vehicle_id: formData.vehicle_id, daily_rate: formData.daily_rate }] : undefined)
     };
 
     await onSubmit(submitData);
@@ -234,8 +240,12 @@ export const ContractForm: React.FC<ContractFormProps> = ({
       setLoadingAvailableVehicles(true);
       const available = await getAvailableVehicles(startDate, endDate, contract?.id);
       setAvailableVehicles(available);
-    } catch (error) {
-      console.error('Erro ao buscar veículos disponíveis:', error);
+    } catch (error: unknown) {
+      if (typeof error === 'object' && error !== null && 'message' in error && typeof (error as { message?: string }).message === 'string' && (error as { message: string }).message.includes('400')) {
+        alert('Erro ao buscar veículos disponíveis: verifique as datas selecionadas.');
+      } else {
+        alert('Erro ao buscar veículos disponíveis.');
+      }
       setAvailableVehicles([]);
     } finally {
       setLoadingAvailableVehicles(false);
@@ -291,6 +301,22 @@ export const ContractForm: React.FC<ContractFormProps> = ({
   return (
     <form onSubmit={handleSubmit} className="space-y-4 lg:space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-secondary-700 mb-2">
+            Nome do Contrato *
+          </label>
+          <input
+            type="text"
+            name="name"
+            value={formData.name}
+            onChange={handleChange}
+            className="w-full border border-secondary-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
+            required
+            maxLength={100}
+            placeholder="Ex: Contrato Frotista, Contrato Mensal, etc."
+          />
+        </div>
+
         <div>
           <label className="block text-sm font-medium text-secondary-700 mb-2">
             Cliente *
@@ -429,22 +455,21 @@ export const ContractForm: React.FC<ContractFormProps> = ({
                 onChange={handleChange}
                 className="w-full pl-10 pr-4 py-2 border border-secondary-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                 required
-                disabled={loadingAllVehicles}
+                disabled={loadingAllVehicles || loadingAvailableVehicles}
               >
                 <option value="">
-                  {(loadingAllVehicles || loadingAvailableVehicles) ? 'Carregando veículos...' : 
-                   (formData.start_date && formData.end_date && availableVehicles.length === 0) ? 
-                   'Nenhum veículo disponível no período' : 
+                  {(loadingAllVehicles || loadingAvailableVehicles) ? 'Carregando veículos...' :
+                   (formData.start_date && formData.end_date && availableVehicles.length === 0) ?
+                   'Nenhum veículo disponível no período' :
                    'Selecione um veículo da frota'}
                 </option>
-                {(availableVehicles.length > 0 && formData.start_date && formData.end_date ? 
-                  availableVehicles : 
-                  vehicles.filter(v => v.status === 'Disponível')
-                ).map(vehicle => (
-                  <option key={vehicle.id} value={vehicle.id}>
-                    {vehicle.plate} - {vehicle.model} ({vehicle.year}) - {vehicle.status}
-                  </option>
-                ))}
+                {formData.start_date && formData.end_date
+                  ? availableVehicles.map(vehicle => (
+                      <option key={vehicle.id} value={vehicle.id}>
+                        {vehicle.plate} - {vehicle.model} ({vehicle.year}) - {vehicle.status}
+                      </option>
+                    ))
+                  : null}
               </select>
             </div>
           </div>

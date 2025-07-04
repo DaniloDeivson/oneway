@@ -17,6 +17,7 @@ interface UserEditModalProps {
     role: string;
     active: boolean;
     tenant_id?: string;
+    permissions?: Record<string, boolean>;
   };
   onUserUpdated: () => void;
 }
@@ -34,15 +35,34 @@ const JOB_ROLES = {
   'Compras': 'Compras'
 };
 
+// Lista de permissões disponíveis (deve bater com os permissions usados no Sidebar e AuthGuard)
+const MODULE_PERMISSIONS = [
+  { key: 'dashboard', label: 'Dashboard' },
+  { key: 'fleet', label: 'Frota' },
+  { key: 'costs', label: 'Custos' },
+  { key: 'finance', label: 'Financeiro' },
+  { key: 'inventory', label: 'Estoque' },
+  { key: 'contracts', label: 'Clientes & Contratos' },
+  { key: 'inspections', label: 'Controle de Pátio' },
+  { key: 'fines', label: 'Multas' },
+  { key: 'suppliers', label: 'Fornecedores' },
+  { key: 'purchases', label: 'Compras' },
+  { key: 'statistics', label: 'Estatísticas' },
+  { key: 'admin', label: 'Admin Panel' },
+  { key: 'employees', label: 'Funcionários' },
+  { key: 'maintenance', label: 'Manutenção' },
+];
+
 export default function UserEditModal({ isOpen, onClose, user, onUserUpdated }: UserEditModalProps) {
   const { updateEmployee, deleteEmployee, loading } = useEmployees();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     phone: '',
-    role: '',
+    roles: [] as string[],
     active: true
   });
+  const [permissions, setPermissions] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (user && isOpen) {
@@ -50,31 +70,31 @@ export default function UserEditModal({ isOpen, onClose, user, onUserUpdated }: 
         name: user.name || '',
         email: user.contact_info?.email || '',
         phone: user.contact_info?.phone || '',
-        role: user.role || '',
+        roles: Array.isArray(user.role) ? user.role : [user.role],
         active: user.active !== undefined ? user.active : true
       });
+      setPermissions(user.permissions || {});
     }
   }, [user, isOpen]);
 
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     
-    if (!formData.name || !formData.email || !formData.role) {
-      toast.error('Por favor, preencha todos os campos obrigatórios');
+    if (!formData.name || !formData.email || formData.roles.length === 0) {
+      toast.error('Por favor, preencha todos os campos obrigatórios e selecione pelo menos uma função');
       return;
     }
 
     try {
-      // Monta o objeto de atualização APENAS com campos que existem na tabela
       const updates: any = {
         name: formData.name,
         contact_info: {
           email: formData.email,
           phone: formData.phone || null
         },
-        role: formData.role as 'Admin' | 'Mechanic' | 'PatioInspector' | 'Sales' | 'Driver' | 'FineAdmin' | 'Manager',
+        role: formData.roles,
         active: formData.active,
-        // Removidos: department e hire_date (não existem na tabela)
+        permissions: permissions,
         updated_at: new Date().toISOString()
       };
 
@@ -109,6 +129,19 @@ export default function UserEditModal({ isOpen, onClose, user, onUserUpdated }: 
       ...prev,
       [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value
     }));
+  };
+
+  const handlePermissionChange = (perm: string) => {
+    setPermissions(prev => ({ ...prev, [perm]: !prev[perm] }));
+  };
+
+  const handleRoleChange = (role: string) => {
+    setFormData(prev => {
+      const roles = prev.roles.includes(role)
+        ? prev.roles.filter(r => r !== role)
+        : [...prev.roles, role];
+      return { ...prev, roles };
+    });
   };
 
   if (!isOpen) return null;
@@ -191,28 +224,23 @@ export default function UserEditModal({ isOpen, onClose, user, onUserUpdated }: 
               </div>
 
               <div>
-                <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-1">
-                  Papel *
+                <label htmlFor="roles" className="block text-sm font-medium text-gray-700 mb-1">
+                  Funções *
                 </label>
-                <div className="relative">
-                  <UserCheck className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <select
-                    id="role"
-                    name="role"
-                    value={formData.role}
-                    onChange={handleChange}
-                    required
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  >
-                    <option value="">Selecione um papel</option>
-                    {Object.entries(JOB_ROLES).map(([key, value]) => (
-                      <option key={key} value={key}>{value}</option>
-                    ))}
-                  </select>
+                <div className="grid grid-cols-2 gap-2">
+                  {Object.entries(JOB_ROLES).map(([key, value]) => (
+                    <label key={key} className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        checked={formData.roles.includes(key)}
+                        onChange={() => handleRoleChange(key)}
+                        className="h-4 w-4 text-primary-600 border-gray-300 rounded"
+                      />
+                      <span>{value}</span>
+                    </label>
+                  ))}
                 </div>
               </div>
-
-              {/* Campos department e hire_date removidos - não existem na tabela employees */}
 
               <div className="flex items-center">
                 <input

@@ -285,6 +285,15 @@ export const Employees: React.FC = () => {
                   <div>
                     <p className="font-medium text-secondary-900">{employee.name}</p>
                     <p className="text-sm text-secondary-600">{employee.contact_info?.email}</p>
+                    {Array.isArray(employee.role) ? employee.role.map((role: string) => (
+                      <span key={role} className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-secondary-100 text-secondary-700">
+                        {getRoleLabel(role)}
+                      </span>
+                    )) : (
+                      <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-secondary-100 text-secondary-700">
+                        {getRoleLabel(employee.role)}
+                      </span>
+                    )}
                     {getAdditionalRolesBadges(employee)}
                   </div>
                   <div className="flex flex-col items-end">
@@ -306,13 +315,13 @@ export const Employees: React.FC = () => {
                   >
                     <Edit className="h-4 w-4" />
                   </button>
-                  <button 
+                  <Button
                     onClick={() => handleToggleActive(employee)}
-                    className="p-2 text-secondary-400 hover:text-warning-600"
-                    title={employee.active ? 'Desativar' : 'Ativar'}
+                    size="sm"
+                    className={`w-full sm:w-auto mt-2 ${employee.active ? 'bg-green-500 hover:bg-green-600 text-white' : 'bg-red-500 hover:bg-red-600 text-white'}`}
                   >
-                    <UserCheck className="h-4 w-4" />
-                  </button>
+                    {employee.active ? 'Desativar' : 'Ativar'}
+                  </Button>
                   <button 
                     onClick={() => handleDelete(employee.id)}
                     className="p-2 text-secondary-400 hover:text-error-600"
@@ -351,6 +360,15 @@ export const Employees: React.FC = () => {
                           <div className="text-sm font-medium text-secondary-900">{employee.name}</div>
                           {employee.employee_code && (
                             <div className="text-xs text-secondary-500">Código: {employee.employee_code}</div>
+                          )}
+                          {Array.isArray(employee.role) ? employee.role.map((role: string) => (
+                            <span key={role} className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-secondary-100 text-secondary-700">
+                              {getRoleLabel(role)}
+                            </span>
+                          )) : (
+                            <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-secondary-100 text-secondary-700">
+                              {getRoleLabel(employee.role)}
+                            </span>
                           )}
                           {getAdditionalRolesBadges(employee)}
                         </div>
@@ -393,13 +411,13 @@ export const Employees: React.FC = () => {
                         >
                           <Edit className="h-4 w-4" />
                         </button>
-                        <button 
+                        <Button
                           onClick={() => handleToggleActive(employee)}
-                          className="p-1 text-secondary-400 hover:text-warning-600"
-                          title={employee.active ? 'Desativar' : 'Ativar'}
+                          size="sm"
+                          className={`w-full sm:w-auto mt-2 ${employee.active ? 'bg-green-500 hover:bg-green-600 text-white' : 'bg-red-500 hover:bg-red-600 text-white'}`}
                         >
-                          <UserCheck className="h-4 w-4" />
-                        </button>
+                          {employee.active ? 'Desativar' : 'Ativar'}
+                        </Button>
                         <button 
                           onClick={() => handleDelete(employee.id)}
                           className="p-1 text-secondary-400 hover:text-error-600"

@@ -4,6 +4,7 @@ import { Badge } from '../UI/Badge';
 import { Button } from '../UI/Button';
 import { Search, Filter, UserCheck, DollarSign, Calendar, CheckCircle, Loader2 } from 'lucide-react';
 import { Salary } from '../../hooks/useFinance';
+import { useEmployees } from '../../hooks/useEmployees';
 
 interface SalaryManagementProps {
   salaries: Salary[];
@@ -12,15 +13,180 @@ interface SalaryManagementProps {
   loading: boolean;
 }
 
-export const SalaryManagement: React.FC<SalaryManagementProps> = ({
+interface EditSalaryModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  salary: Salary | null;
+  onSave: (id: string, updates: Partial<Salary>) => Promise<void>;
+  loading: boolean;
+}
+
+interface NewSalaryModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (data: { employee_id: string; amount: number; payment_date: string; status: string; reference_month: string }) => Promise<void>;
+  loading: boolean;
+}
+
+const EditSalaryModal: React.FC<EditSalaryModalProps> = ({ isOpen, onClose, salary, onSave, loading }) => {
+  const [amount, setAmount] = useState(salary?.amount || 0);
+
+  React.useEffect(() => {
+    setAmount(salary?.amount || 0);
+  }, [salary]);
+
+  if (!isOpen || !salary) return null;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await onSave(salary.id, { amount });
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg p-4 w-full max-w-md">
+        <h2 className="text-lg font-semibold mb-4">Editar Salário</h2>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">Valor do Salário (R$)</label>
+            <input
+              type="number"
+              value={amount}
+              onChange={e => setAmount(Number(e.target.value))}
+              className="w-full border border-secondary-300 rounded-lg px-3 py-2"
+              min={0}
+              required
+            />
+          </div>
+          <div className="flex justify-end space-x-2">
+            <Button type="button" variant="secondary" onClick={onClose} disabled={loading}>Cancelar</Button>
+            <Button type="submit" variant="primary" disabled={loading}>Salvar</Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+const NewSalaryModal: React.FC<NewSalaryModalProps> = ({ isOpen, onClose, onSave, loading }) => {
+  const [employee_id, setEmployeeId] = useState('');
+  const [amount, setAmount] = useState(0);
+  const [payment_date, setPaymentDate] = useState('');
+  const [status, setStatus] = useState('Pendente');
+  const [reference_month, setReferenceMonth] = useState('');
+  const { employees, loading: loadingEmployees } = useEmployees();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!employee_id || !amount || !payment_date || !reference_month) {
+      alert('Preencha todos os campos obrigatórios!');
+      return;
+    }
+    // Converte YYYY-MM para YYYY-MM-01 (date)
+    const refMonthDate = reference_month.length === 7 ? `${reference_month}-01` : reference_month;
+    await onSave({ employee_id, amount, payment_date, status, reference_month: refMonthDate });
+    onClose();
+    setEmployeeId(''); setAmount(0); setPaymentDate(''); setStatus('Pendente'); setReferenceMonth('');
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg p-4 w-full max-w-md">
+        <h2 className="text-lg font-semibold mb-4">Adicionar Salário</h2>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">Funcionário</label>
+            <select
+              value={employee_id}
+              onChange={e => setEmployeeId(e.target.value)}
+              className="w-full border border-secondary-300 rounded-lg px-3 py-2"
+              required
+              disabled={loadingEmployees}
+            >
+              <option value="">Selecione o funcionário</option>
+              {employees.map(emp => (
+                <option key={emp.id} value={emp.id}>
+                  {emp.name} ({emp.role})
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Valor do Salário (R$)</label>
+            <input
+              type="number"
+              value={amount}
+              onChange={e => setAmount(Number(e.target.value))}
+              className="w-full border border-secondary-300 rounded-lg px-3 py-2"
+              min={0}
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Data de Pagamento</label>
+            <input
+              type="date"
+              value={payment_date}
+              onChange={e => setPaymentDate(e.target.value)}
+              className="w-full border border-secondary-300 rounded-lg px-3 py-2"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Status</label>
+            <select
+              value={status}
+              onChange={e => setStatus(e.target.value)}
+              className="w-full border border-secondary-300 rounded-lg px-3 py-2"
+              required
+            >
+              <option value="Pendente">Pendente</option>
+              <option value="Pago">Pago</option>
+              <option value="Autorizado">Autorizado</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Mês de Referência (MM-YYYY)</label>
+            <input
+              type="month"
+              value={reference_month}
+              onChange={e => setReferenceMonth(e.target.value)}
+              className="w-full border border-secondary-300 rounded-lg px-3 py-2"
+              required
+            />
+          </div>
+          <div className="flex justify-end space-x-2">
+            <Button type="button" variant="secondary" onClick={onClose} disabled={loading}>Cancelar</Button>
+            <Button type="submit" variant="primary" disabled={loading}>Salvar</Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+export const SalaryManagement: React.FC<SalaryManagementProps & {
+  onEditSalary: (id: string, updates: Partial<Salary>) => Promise<void>;
+  onDeleteSalary: (id: string) => Promise<void>;
+  onCreateSalary: (data: { employee_id: string; amount: number; payment_date: string; status: string; reference_month: string }) => Promise<void>;
+}> = ({
   salaries,
   onMarkAsPaid,
   onGenerateSalaries,
-  loading
+  loading,
+  onEditSalary,
+  onDeleteSalary,
+  onCreateSalary
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [salaryToEdit, setSalaryToEdit] = useState<Salary | null>(null);
+  const [newModalOpen, setNewModalOpen] = useState(false);
 
   // Filter salaries
   const filteredSalaries = salaries.filter(salary => {
@@ -62,18 +228,27 @@ export const SalaryManagement: React.FC<SalaryManagementProps> = ({
       <CardHeader className="p-4 lg:p-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <h3 className="text-lg font-semibold text-secondary-900">Folha de Pagamento</h3>
-          <Button 
-            onClick={handleGenerateSalaries}
-            disabled={isGenerating}
-            size="sm"
-          >
-            {isGenerating ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <DollarSign className="h-4 w-4 mr-2" />
-            )}
-            Gerar Folha do Mês
-          </Button>
+          <div className="flex gap-2">
+            <Button 
+              onClick={handleGenerateSalaries}
+              disabled={isGenerating}
+              size="sm"
+            >
+              {isGenerating ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <DollarSign className="h-4 w-4 mr-2" />
+              )}
+              Gerar Folha do Mês
+            </Button>
+            <Button
+              onClick={() => setNewModalOpen(true)}
+              size="sm"
+              variant="primary"
+            >
+              + Adicionar Salário
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="p-4 lg:p-6">
@@ -163,7 +338,7 @@ export const SalaryManagement: React.FC<SalaryManagementProps> = ({
                   <td className="px-6 py-4 whitespace-nowrap">
                     {getStatusBadge(salary.status)}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
                     {salary.status === 'Pendente' && (
                       <Button 
                         onClick={() => onMarkAsPaid(salary.id)}
@@ -175,12 +350,41 @@ export const SalaryManagement: React.FC<SalaryManagementProps> = ({
                         Pagar
                       </Button>
                     )}
+                    <Button
+                      onClick={() => { setSalaryToEdit(salary); setEditModalOpen(true); }}
+                      size="sm"
+                      variant="secondary"
+                    >
+                      Editar
+                    </Button>
+                    <Button
+                      onClick={() => onDeleteSalary(salary.id)}
+                      size="sm"
+                      variant="error"
+                    >
+                      Remover
+                    </Button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+
+        <EditSalaryModal
+          isOpen={editModalOpen}
+          onClose={() => setEditModalOpen(false)}
+          salary={salaryToEdit}
+          onSave={onEditSalary}
+          loading={loading}
+        />
+
+        <NewSalaryModal
+          isOpen={newModalOpen}
+          onClose={() => setNewModalOpen(false)}
+          onSave={onCreateSalary}
+          loading={loading}
+        />
 
         {filteredSalaries.length === 0 && (
           <div className="text-center py-12">

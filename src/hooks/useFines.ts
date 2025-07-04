@@ -193,33 +193,37 @@ export const useFines = () => {
 
   const createFine = async (fineData: Omit<FineInsert, 'tenant_id'>) => {
     try {
-      
       // Validate required fields before sending to Supabase
       const requiredFields = ['vehicle_id', 'employee_id', 'infraction_type', 'amount', 'infraction_date', 'due_date'];
       const missingFields = requiredFields.filter(field => !fineData[field as keyof typeof fineData]);
-      
       if (missingFields.length > 0) {
-        const error = `Missing required fields: ${missingFields.join(', ')}`;
-        throw new Error(error);
+        const errorMsg = `Missing required fields: ${missingFields.join(', ')}`;
+        throw new Error(errorMsg);
       }
-      
       // Validate data types
       if (typeof fineData.amount !== 'number' || fineData.amount <= 0) {
         throw new Error('Amount must be a positive number');
       }
-      
       if (fineData.points !== undefined && fineData.points !== null && (typeof fineData.points !== 'number' || fineData.points < 0)) {
         throw new Error('Points must be a non-negative number');
       }
-      
+      // Tratar fine_number vazio como null para evitar conflito desnecessário
+      const fineToInsert = {
+        ...fineData,
+        fine_number: fineData.fine_number && fineData.fine_number !== '' ? fineData.fine_number : null,
+        tenant_id: DEFAULT_TENANT_ID
+      };
       // First, try to insert without complex select to isolate the issue
       const { data: insertedData, error: insertError } = await supabase
         .from('fines')
-        .insert([{ ...fineData, tenant_id: DEFAULT_TENANT_ID }])
+        .insert([fineToInsert])
         .select('*')
         .single();
-
       if (insertError) {
+        // Checagem extra para erro de chave duplicada
+        if (insertError.message && insertError.message.includes('duplicate key')) {
+          throw new Error('Já existe uma multa com esse número. Escolha outro número ou deixe em branco.');
+        }
         throw insertError;
       }
       
@@ -272,9 +276,7 @@ export const useFines = () => {
       // More detailed error handling
       if (err && typeof err === 'object' && 'message' in err) {
         const errorMessage = (err as any).message;
-        if (errorMessage.includes('duplicate key')) {
-          toast.error('Erro: Multa com esse número já existe.');
-        } else if (errorMessage.includes('foreign key')) {
+        if (errorMessage.includes('foreign key')) {
           toast.error('Erro: Veículo, funcionário ou motorista não encontrado.');
         } else if (errorMessage.includes('check constraint')) {
           toast.error('Erro: Dados inválidos. Verifique os valores inseridos.');
@@ -374,9 +376,7 @@ export const useFines = () => {
       // More detailed error handling
       if (err && typeof err === 'object' && 'message' in err) {
         const errorMessage = (err as any).message;
-        if (errorMessage.includes('duplicate key')) {
-          toast.error('Erro: Multa com esse número já existe.');
-        } else if (errorMessage.includes('foreign key')) {
+        if (errorMessage.includes('foreign key')) {
           toast.error('Erro: Veículo, funcionário ou motorista não encontrado.');
         } else if (errorMessage.includes('check constraint')) {
           toast.error('Erro: Dados inválidos. Verifique os valores inseridos.');

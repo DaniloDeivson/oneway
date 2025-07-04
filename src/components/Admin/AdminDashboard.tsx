@@ -237,7 +237,6 @@ export default function AdminDashboard() {
                         <div className="ml-4">
                           <div className="text-sm font-medium text-secondary-900">{user.name}</div>
                           <div className="text-sm text-secondary-500">{user.contact_info?.email}</div>
-                          {getAdditionalRolesBadges(user)}
                         </div>
                       </div>
                     </td>

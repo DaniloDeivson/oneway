@@ -279,6 +279,27 @@ export const useFinance = () => {
     }
   };
 
+  const updateSalary = async (id: string, updates: Partial<Salary>) => {
+    const { data, error } = await supabase
+      .from('salaries')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    await fetchSalaries();
+    return data;
+  };
+
+  const deleteSalary = async (id: string) => {
+    const { error } = await supabase
+      .from('salaries')
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
+    await fetchSalaries();
+  };
+
   useEffect(() => {
     fetchAccountsPayable();
     fetchSalaries();
@@ -301,6 +322,8 @@ export const useFinance = () => {
     generateSalaries,
     syncCostsToAccountsPayable,
     deleteRecurringExpense,
+    updateSalary,
+    deleteSalary,
     refetch: async () => {
       await fetchAccountsPayable();
       await fetchSalaries();

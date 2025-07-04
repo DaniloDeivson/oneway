@@ -8,6 +8,7 @@ interface CostsListProps {
   onView: (cost: any) => void;
   onEdit?: (cost: any) => void;
   onAuthorize?: (cost: any) => void;
+  onMarkAsPaid?: (cost: any) => void;
   canEdit?: boolean;
   canAuthorize?: boolean;
 }
@@ -17,6 +18,7 @@ export const CostsList: React.FC<CostsListProps> = ({
   onView,
   onEdit,
   onAuthorize,
+  onMarkAsPaid,
   canEdit = false,
   canAuthorize = false
 }) => {
@@ -152,16 +154,27 @@ export const CostsList: React.FC<CostsListProps> = ({
               </td>
               <td className="py-4 px-6">
                 <div className="flex items-center space-x-2">
-                  {cost.status === 'Pendente' && cost.category === 'Compra' && canAuthorize && (
-                    <Button 
-                      onClick={() => onAuthorize && onAuthorize(cost)}
-                      variant="success"
-                      size="sm"
-                      className="flex items-center"
-                    >
-                      <CheckCircle className="h-3 w-3 mr-1" />
-                      Autorizar
-                    </Button>
+                  {cost.status === 'Pendente' && canAuthorize && (
+                    <>
+                      <Button 
+                        onClick={() => onAuthorize && onAuthorize(cost)}
+                        variant="success"
+                        size="sm"
+                        className="flex items-center"
+                      >
+                        <CheckCircle className="h-3 w-3 mr-1" />
+                        Autorizar
+                      </Button>
+                      <Button
+                        onClick={() => onMarkAsPaid && onMarkAsPaid(cost)}
+                        variant="info"
+                        size="sm"
+                        className="flex items-center"
+                      >
+                        <DollarSign className="h-3 w-3 mr-1" />
+                        Pago
+                      </Button>
+                    </>
                   )}
                   <button 
                     onClick={() => onView(cost)}

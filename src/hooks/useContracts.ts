@@ -14,8 +14,8 @@ type Contract = Database['public']['Tables']['contracts']['Row'] & {
   }>;
 };
 
-type ContractInsert = Database['public']['Tables']['contracts']['Insert'];
-type ContractUpdate = Database['public']['Tables']['contracts']['Update'];
+type ContractInsert = Omit<Database['public']['Tables']['contracts']['Insert'], 'name'> & { name: string };
+type ContractUpdate = Omit<Database['public']['Tables']['contracts']['Update'], 'name'> & { name: string };
 type ContractVehicleInsert = Database['public']['Tables']['contract_vehicles']['Insert'];
 
 interface ContractStatistics {
@@ -99,8 +99,8 @@ export const useContracts = () => {
 
       if (error) throw error;
       setContracts(data || []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+    } catch {
+      setError('An error occurred');
       toast.error('Erro ao carregar contratos');
     } finally {
       setLoading(false);
@@ -116,7 +116,7 @@ export const useContracts = () => {
       if (data && data.length > 0) {
         setStatistics(data[0]);
       }
-    } catch (err) {
+    } catch {
       // Error handling for statistics
     }
   };
@@ -133,7 +133,7 @@ export const useContracts = () => {
 
       if (error) throw error;
       return data || [];
-    } catch (err) {
+    } catch {
       return [];
     }
   };
@@ -166,8 +166,7 @@ export const useContracts = () => {
         has_conflict: hasAnyConflict,
         conflicting_contracts: allConflictingContracts
       };
-    } catch (err) {
-      console.error('Error checking conflicts:', err);
+    } catch {
       return { has_conflict: false, conflicting_contracts: [] };
     }
   };
@@ -186,8 +185,8 @@ export const useContracts = () => {
         .insert(contractVehicles);
 
       if (error) throw error;
-    } catch (err) {
-      throw new Error(err instanceof Error ? err.message : 'Failed to create contract vehicles');
+    } catch {
+      throw new Error('Failed to create contract vehicles');
     }
   };
 
@@ -203,8 +202,8 @@ export const useContracts = () => {
       if (vehicleData.length > 0) {
         await createContractVehicles(contractId, vehicleData);
       }
-    } catch (err) {
-      throw new Error(err instanceof Error ? err.message : 'Failed to update contract vehicles');
+    } catch {
+      throw new Error('Failed to update contract vehicles');
     }
   };
 
@@ -214,7 +213,7 @@ export const useContracts = () => {
     try {
       const { vehicles: vehicleData, ...contractInfo } = contractData;
       const isMultipleVehicles = vehicleData && vehicleData.length > 1;
-      
+
       // For single vehicle contracts, use the traditional approach
       if (!isMultipleVehicles && vehicleData && vehicleData.length === 1) {
         // Verificar conflitos antes de criar
@@ -232,6 +231,7 @@ export const useContracts = () => {
           .from('contracts')
           .insert([{ 
             ...contractInfo, 
+            name: contractInfo.name,
             tenant_id: DEFAULT_TENANT_ID,
             vehicle_id: vehicleData[0].vehicle_id,
             daily_rate: vehicleData[0].daily_rate || contractInfo.daily_rate,
@@ -253,7 +253,10 @@ export const useContracts = () => {
           `)
           .single();
 
-        if (error) throw error;
+        if (error) {
+          console.error('Erro ao criar contrato (single vehicle):', error);
+          throw error;
+        }
         setContracts(prev => [data, ...prev]);
         await fetchStatistics();
         return data;
@@ -262,7 +265,7 @@ export const useContracts = () => {
       // For multiple vehicles, use the new approach
       if (vehicleData && vehicleData.length > 0) {
         const vehicleIds = vehicleData.map(v => v.vehicle_id);
-        
+
         // Verificar conflitos para todos os veículos
         const conflicts = await checkContractConflicts(
           vehicleIds,
@@ -279,6 +282,7 @@ export const useContracts = () => {
           .from('contracts')
           .insert([{ 
             ...contractInfo, 
+            name: contractInfo.name,
             tenant_id: DEFAULT_TENANT_ID,
             vehicle_id: vehicleData[0].vehicle_id, // Primary vehicle for compatibility
             uses_multiple_vehicles: vehicleData.length > 1
@@ -286,7 +290,10 @@ export const useContracts = () => {
           .select('*')
           .single();
 
-        if (contractError) throw contractError;
+        if (contractError) {
+          console.error('Erro ao criar contrato (multi vehicle):', contractError);
+          throw contractError;
+        }
 
         // Create contract vehicles relationships
         await createContractVehicles(contractResult.id, vehicleData);
@@ -322,7 +329,10 @@ export const useContracts = () => {
           .eq('id', contractResult.id)
           .single();
 
-        if (fetchError) throw fetchError;
+        if (fetchError) {
+          console.error('Erro ao buscar contrato completo:', fetchError);
+          throw fetchError;
+        }
 
         setContracts(prev => [completeContract, ...prev]);
         await fetchStatistics();
@@ -331,7 +341,8 @@ export const useContracts = () => {
 
       throw new Error('Pelo menos um veículo deve ser selecionado');
     } catch (err) {
-      throw new Error(err instanceof Error ? err.message : 'Failed to create contract');
+      console.error('Erro inesperado ao criar contrato:', err);
+      throw new Error('Failed to create contract');
     }
   };
 
@@ -383,7 +394,7 @@ export const useContracts = () => {
 
       const { data, error } = await supabase
         .from('contracts')
-        .update({ ...contractUpdates, updated_at: new Date().toISOString() })
+        .update({ ...contractUpdates, name: contractUpdates.name, updated_at: new Date().toISOString() })
         .eq('id', id)
         .select(`
           *,
@@ -416,8 +427,8 @@ export const useContracts = () => {
       setContracts(prev => prev.map(c => c.id === id ? data : c));
       await fetchStatistics(); // Atualizar estatísticas
       return data;
-    } catch (err) {
-      throw new Error(err instanceof Error ? err.message : 'Failed to update contract');
+    } catch {
+      throw new Error('Failed to update contract');
     }
   };
 
@@ -431,8 +442,8 @@ export const useContracts = () => {
       if (error) throw error;
       setContracts(prev => prev.filter(c => c.id !== id));
       await fetchStatistics(); // Atualizar estatísticas
-    } catch (err) {
-      throw new Error(err instanceof Error ? err.message : 'Failed to delete contract');
+    } catch {
+      throw new Error('Failed to delete contract');
     }
   };
 
@@ -449,8 +460,8 @@ export const useContracts = () => {
       }
       
       return data; // Retorna número de contratos finalizados
-    } catch (err) {
-      console.error('Error finalizing contracts:', err);
+    } catch {
+      console.error('Error finalizing contracts:');
       return 0;
     }
   };
@@ -464,8 +475,8 @@ export const useContracts = () => {
       
       await fetchContracts(); // Recarregar contratos
       return true;
-    } catch (err) {
-      console.error('Error updating contract payment status:', err);
+    } catch {
+      console.error('Error updating contract payment status:');
       return false;
     }
   };
@@ -477,7 +488,7 @@ export const useContracts = () => {
 
       if (error) throw error;
       return data || 0;
-    } catch (err) {
+    } catch {
       return 0;
     }
   };
@@ -489,7 +500,7 @@ export const useContracts = () => {
 
       if (error) throw error;
       return data || 0;
-    } catch (err) {
+    } catch {
       return 0;
     }
   };

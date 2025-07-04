@@ -156,12 +156,14 @@ export const useVehicles = () => {
     }
   };
 
-  const deleteVehicle = async (id: string) => {
+  const deleteVehicle = async (id: string, tenantId?: string) => {
     try {
+      const tenant_id = tenantId || DEFAULT_TENANT_ID;
       const { error } = await supabase
         .from('vehicles')
         .delete()
-        .eq('id', id);
+        .eq('id', id)
+        .eq('tenant_id', tenant_id);
 
       if (error) throw error;
       setVehicles(prev => prev.filter(v => v.id !== id));

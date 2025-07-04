@@ -21,6 +21,7 @@ import { Finance } from './pages/Finance';
 import Notas from './pages/Notas';
 import Login from './pages/Login';
 import Cobranca from './pages/Cobranca';
+import Register from './pages/Register';
 
 function App() {
   return (
@@ -28,22 +29,63 @@ function App() {
       <Router>
         <Routes>
           <Route path="/login" element={<Login />} />
-          <Route path="/" element={<AuthGuard><Layout /></AuthGuard>}>
-            <Route index element={<Dashboard />} />
-            <Route path="frota" element={<Fleet />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/" element={<AuthGuard requiredPermission="dashboard"><Layout /></AuthGuard>}>
+            <Route index element={
+              <AuthGuard requiredPermission="dashboard">
+                <Dashboard />
+              </AuthGuard>
+            } />
+            <Route path="frota" element={
+              <AuthGuard requiredPermission="fleet">
+                <Fleet />
+              </AuthGuard>
+            } />
             <Route path="custos" element={
-              <AuthGuard managerOrAdminOnly>
+              <AuthGuard requiredPermission="costs">
                 <Costs />
               </AuthGuard>
             } />
-            <Route path="manutencao" element={<Maintenance />} />
-            <Route path="estoque" element={<Inventory />} />
-            <Route path="contratos" element={<Contracts />} />
-            <Route path="inspecoes" element={<Inspections />} />
-            <Route path="multas" element={<Fines />} />
-            <Route path="fornecedores" element={<Suppliers />} />
-            <Route path="compras" element={<PurchaseOrders />} />
-            <Route path="estatisticas" element={<Statistics />} />
+            <Route path="manutencao" element={
+              <AuthGuard requiredPermission="maintenance">
+                <Maintenance />
+              </AuthGuard>
+            } />
+            <Route path="estoque" element={
+              <AuthGuard requiredPermission="inventory">
+                <Inventory />
+              </AuthGuard>
+            } />
+            <Route path="contratos" element={
+              <AuthGuard requiredPermission="contracts">
+                <Contracts />
+              </AuthGuard>
+            } />
+            <Route path="inspecoes" element={
+              <AuthGuard requiredPermission="inspections">
+                <Inspections />
+              </AuthGuard>
+            } />
+            <Route path="multas" element={
+              <AuthGuard requiredPermission="fines">
+                <Fines />
+              </AuthGuard>
+            } />
+            <Route path="fornecedores" element={
+              <AuthGuard requiredPermission="suppliers">
+                <Suppliers />
+              </AuthGuard>
+            } />
+            <Route path="compras" element={
+              <AuthGuard requiredPermission="purchases">
+                <PurchaseOrders />
+              </AuthGuard>
+            } />
+            <Route path="estatisticas" element={
+              <AuthGuard requiredPermission="statistics">
+                <Statistics />
+              </AuthGuard>
+            } />
             <Route path="financeiro" element={
               <AuthGuard requiredPermission="finance">
                 <Finance />
@@ -60,7 +102,7 @@ function App() {
               </AuthGuard>
             } />
             <Route path="admin" element={
-              <AuthGuard adminOnly>
+              <AuthGuard requiredPermission="admin">
                 <Admin />
               </AuthGuard>
             } />

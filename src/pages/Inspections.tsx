@@ -116,12 +116,13 @@ const InspectionModal: React.FC<InspectionModalProps> = ({
   const handleSubmit = async (formData: any) => {
     setLoading(true);
     try {
-      // Para nova inspeção, passar também os danos do carrinho
-      // Para inspeção existente, passar os danos do carrinho para sincronização
-      const damagesWithoutId = damageCart.map(({ id, ...damage }) => damage);
-      await onSave(formData, inspection ? damageCart : damagesWithoutId);
-      
-      // Clear damage cart and close modal
+      // Só envie danos se houver no carrinho (para inspeção nova)
+      let damagesToSend: Omit<DamageItem, 'id'>[] | undefined = undefined;
+      if (!inspection && damageCart.length > 0) {
+        damagesToSend = damageCart.map(({ id, ...damage }) => damage);
+      }
+      await onSave(formData, damagesToSend);
+      // Limpa o carrinho e fecha modal
       setDamageCart([]);
       toast.success('Inspeção salva com sucesso!');
       onClose();
@@ -159,7 +160,8 @@ const InspectionModal: React.FC<InspectionModalProps> = ({
         if (damagesWithId.length > 0) {
           toast.success(`${damagesWithId.length} danos adicionados ao carrinho!`);
         }
-        return [...prev, ...damagesWithId];
+        // Limpa o carrinho após adicionar (evita duplicidade ao abrir novamente)
+        return damagesWithId;
       });
     }
   };

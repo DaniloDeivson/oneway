@@ -48,11 +48,11 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
   // Redirect when user is authenticated and loginLoading is false
   useEffect(() => {
     if (user && !loginLoading && isOpen) {
-      console.log('✅ User authenticated, redirecting to dashboard');
-      onClose();
+      // Aguarda o carregamento das permissões antes de redirecionar
       setTimeout(() => {
         navigate('/', { replace: true });
-      }, 100);
+        if (onClose) onClose();
+      }, 200); // Pequeno delay para garantir que o contexto está atualizado
     }
   }, [user, loginLoading, onClose, navigate, isOpen]);
 

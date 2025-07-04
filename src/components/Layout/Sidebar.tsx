@@ -21,6 +21,7 @@ import {
   CreditCard
 } from 'lucide-react';
 import { UserMenu } from './UserMenu';
+import { useAuth } from '../../hooks/useAuth';
 
 const navigationItems = [
   { name: 'Dashboard', href: '/', icon: Home, permission: 'dashboard' },
@@ -46,8 +47,16 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
-  // Mostrar todos os menus, sem filtro de permissão
-  const filteredNavItems = navigationItems;
+  const { hasPermission, isAdmin } = useAuth();
+  // Filtra os menus conforme as permissões do usuário
+  const filteredNavItems = navigationItems.filter(item => {
+    // Admin sempre vê tudo
+    if (isAdmin) return true;
+    // Se não houver permissão definida, mostra para todos
+    if (!item.permission) return true;
+    // Checa permissão específica
+    return hasPermission(item.permission);
+  });
 
   return (
     <div className="flex flex-col w-64 bg-secondary-900 h-screen sticky top-0 overflow-y-auto">

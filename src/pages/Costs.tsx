@@ -19,7 +19,7 @@ type Cost = Database['public']['Tables']['costs']['Row'] & {
   is_amount_to_define?: boolean;
   contracts?: { id: string; contract_number: string };
   customers?: { id: string; name: string };
-  vehicle_plate?: string;
+  vehicle_plate?: string | undefined;
   vehicle_model?: string;
 };
 
@@ -221,7 +221,7 @@ const CostModal: React.FC<{
             </label>
             <select
               name="department"
-              value={formData.department}
+              value={formData.department ? formData.department : ''}
               onChange={handleChange}
               className="w-full border border-secondary-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
               disabled={isViewOnly}
@@ -401,7 +401,7 @@ const CostModal: React.FC<{
             {isViewOnly && cost?.status === 'Pendente' && (
               <Button 
                 type="button" 
-                disabled={loading} 
+                disabled={Boolean(loading)} 
                 className="w-full sm:w-auto"
                 onClick={() => {
                   setFormData(prev => ({ ...prev, status: 'Pago' }));
@@ -420,7 +420,7 @@ const CostModal: React.FC<{
 };
 
 export const Costs: React.FC = () => {
-  const { costs, loading, createCost, updateCost, debugAutomaticCosts, reprocessInspectionCosts, authorizePurchase, refetch } = useCosts();
+  const { costs, loading, createCost, updateCost, debugAutomaticCosts, reprocessInspectionCosts, authorizePurchase, refetch, markAsPaid } = useCosts();
   const { vehicles } = useVehicles();
   const { employees } = useEmployees();
   const { isAdmin, isManager } = useAuth();
@@ -437,8 +437,8 @@ export const Costs: React.FC = () => {
     const debugCosts = async () => {
       try {
         await debugAutomaticCosts();
-      } catch (error) {
-        console.error('Debug failed:', error);
+      } catch {
+        // erro ignorado
       }
     };
     
@@ -459,6 +459,19 @@ export const Costs: React.FC = () => {
                              cost.department === departmentFilter;
     
     return matchesSearch && matchesOrigin && matchesDepartment;
+  });
+
+  // Mapeia vehicle_id para plate caso vehicle_plate não esteja presente
+  const costsWithVehiclePlate = filteredCosts.map(cost => {
+    const c = cost as Cost & { vehicle_plate?: string };
+    if (!c.vehicle_plate) {
+      const vehicle = vehicles.find(v => v.id === c.vehicle_id);
+      return {
+        ...c,
+        vehicle_plate: vehicle ? vehicle.plate : '-',
+      };
+    }
+    return c;
   });
 
   // Get unique departments for filter
@@ -530,17 +543,25 @@ export const Costs: React.FC = () => {
     }
   };
 
+  const handleMarkAsPaid = async (cost: Cost) => {
+    if (!isAdmin && !isManager) {
+      alert('Apenas administradores e gerentes podem marcar como pago.');
+      return;
+    }
+    if (confirm('Confirmar marcação como pago?')) {
+      try {
+        await markAsPaid(cost.id);
+      } catch (error) {
+        alert('Erro ao marcar como pago');
+      }
+    }
+  };
+
   const totalCosts = filteredCosts.reduce((sum, cost) => sum + cost.amount, 0);
   const pendingCosts = filteredCosts.filter(cost => cost.status === 'Pendente').length;
   const costsToDefine = filteredCosts.filter(cost => cost.amount === 0 && cost.status === 'Pendente').length;
   const automaticCosts = filteredCosts.filter(cost => cost.origin !== 'Manual').length;
   const collectionCosts = filteredCosts.filter(cost => cost.department === 'Cobrança').length;
-
-  // Check if user can edit costs (only Admin can)
-  const canEditCosts = isAdmin;
-  
-  // Check if user can mark costs as paid (Admin and Manager can)
-  const canMarkAsPaid = isAdmin || isManager;
 
   if (loading) {
     return (
@@ -797,7 +818,7 @@ export const Costs: React.FC = () => {
                       >
                         Visualizar
                       </Button>
-                      {canEditCosts && (
+                      {isAdmin || isManager && (
                         <Button 
                           onClick={() => handleEdit(cost)}
                           variant="secondary"
@@ -817,12 +838,13 @@ export const Costs: React.FC = () => {
           {/* Desktop Table */}
           <div className="hidden lg:block overflow-x-auto">
             <CostsList 
-              costs={filteredCosts}
+              costs={costsWithVehiclePlate}
               onView={handleView}
-              onEdit={handleEdit}
-              onAuthorize={handleAuthorizePurchase}
-              canEdit={canEditCosts}
-              canAuthorize={canMarkAsPaid}
+              onEdit={isAdmin || isManager ? handleEdit : undefined}
+              onAuthorize={isAdmin || isManager ? handleAuthorizePurchase : undefined}
+              onMarkAsPaid={isAdmin || isManager ? handleMarkAsPaid : undefined}
+              canEdit={isAdmin || isManager}
+              canAuthorize={isAdmin || isManager}
             />
           </div>
 
@@ -846,7 +868,7 @@ export const Costs: React.FC = () => {
         vehicles={vehicles}
         employees={employees}
         onSave={handleSave}
-        isReadOnly={!canEditCosts && selectedCost?.id}
+        isReadOnly={!isAdmin && !isManager && selectedCost?.id}
       />
 
       {/* View Modal */}

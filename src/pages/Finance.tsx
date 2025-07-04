@@ -21,7 +21,10 @@ export const Finance: React.FC = () => {
     createAccountPayable,
     generateRecurringExpenses,
     generateSalaries,
-    refetch
+    updateSalary,
+    deleteSalary,
+    refetch,
+    createSalary
   } = useFinance();
   
   const [processingAction, setProcessingAction] = useState(false);
@@ -145,6 +148,21 @@ export const Finance: React.FC = () => {
         onMarkAsPaid={handleMarkAsPaid}
         onGenerateSalaries={handleGenerateSalaries}
         loading={processingAction}
+        onEditSalary={async (id, updates) => {
+          await updateSalary(id, updates);
+          toast.success('Salário atualizado com sucesso!');
+          await refetch();
+        }}
+        onDeleteSalary={async (id) => {
+          await deleteSalary(id);
+          toast.success('Salário removido com sucesso!');
+          await refetch();
+        }}
+        onCreateSalary={async (data) => {
+          await createSalary(data);
+          toast.success('Salário criado com sucesso!');
+          await refetch();
+        }}
       />
 
       {/* Recurring Expenses 

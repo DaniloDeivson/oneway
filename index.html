@@ -32,38 +32,83 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://oneway-rent-a-car.netlify.app">
     
-    <!-- Web3 Extension Protection -->
+    <!-- Web3 Extension Protection - Enhanced for Mobile -->
     <script>
-      // Prevent Web3 extensions from interfering with the app
-      if (typeof window !== 'undefined') {
-        // Block common Web3 injections that can cause mobile errors
+      // Enhanced Web3 extension blocking for mobile compatibility
+      (function() {
+        'use strict';
+        
         const blockWeb3Extensions = () => {
           try {
-            delete window.ethereum;
-            delete window.web3;
-            delete window.solana;
-            delete window.exodus;
-            delete window.mises;
-            // Prevent extension scripts from running
-            Object.defineProperty(window, 'ethereum', {
-              value: undefined,
-              writable: false,
-              configurable: false
+            // List of known Web3 extension properties
+            const web3Properties = [
+              'ethereum', 'web3', 'solana', 'exodus', 'mises', 'phantom', 
+              'metamask', 'coinbase', 'trustwallet', 'binance', 'crypto'
+            ];
+            
+            web3Properties.forEach(prop => {
+              try {
+                delete window[prop];
+                Object.defineProperty(window, prop, {
+                  value: undefined,
+                  writable: false,
+                  configurable: false
+                });
+              } catch (e) {
+                // Property might be non-configurable, ignore
+              }
             });
-            Object.defineProperty(window, 'web3', {
-              value: undefined,
-              writable: false,
-              configurable: false
-            });
+            
+            // Block Web3 script injections
+            const originalAppendChild = Node.prototype.appendChild;
+            const originalInsertBefore = Node.prototype.insertBefore;
+            
+            Node.prototype.appendChild = function(child) {
+              if (child.src && (
+                child.src.includes('mises') || 
+                child.src.includes('web3') || 
+                child.src.includes('ethereum') ||
+                child.src.includes('metamask') ||
+                child.src.includes('wallet')
+              )) {
+                return child; // Block the script
+              }
+              return originalAppendChild.call(this, child);
+            };
+            
+            Node.prototype.insertBefore = function(child, before) {
+              if (child.src && (
+                child.src.includes('mises') || 
+                child.src.includes('web3') || 
+                child.src.includes('ethereum') ||
+                child.src.includes('metamask') ||
+                child.src.includes('wallet')
+              )) {
+                return child; // Block the script
+              }
+              return originalInsertBefore.call(this, child, before);
+            };
+            
           } catch (e) {
-            // Ignore errors if properties can't be deleted
+            // Ignore blocking errors
           }
         };
         
-        // Run immediately and after DOM loads
+        // Block immediately
         blockWeb3Extensions();
-        document.addEventListener('DOMContentLoaded', blockWeb3Extensions);
-      }
+        
+        // Block on DOM ready
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', blockWeb3Extensions);
+        }
+        
+        // Block on window load
+        window.addEventListener('load', blockWeb3Extensions);
+        
+        // Periodic blocking for persistent extensions
+        setInterval(blockWeb3Extensions, 1000);
+        
+      })();
     </script>
     
 

@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
-import { supabase } from '../../lib/supabase';
-import { Loader2, Users, UserPlus, Trash2, Edit, Shield, Search } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { useEmployees } from '../../hooks/useEmployees';
+import { Loader2, Users, Trash2, Edit, Shield, Search, RefreshCw } from 'lucide-react';
 import UserRegistrationSection from './UserRegistrationSection';
+import UserEditModal from './UserEditModal';
+import { toast } from 'react-hot-toast';
 
 // Define job roles for display purposes only
 const JOB_ROLES = {
@@ -21,124 +22,37 @@ const JOB_ROLES = {
 
 export default function AdminDashboard() {
   const { isAdmin } = useAuth();
-  const [users, setUsers] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { employees: users, loading, deleteEmployee, refetch, forceRefresh } = useEmployees();
   const [searchTerm, setSearchTerm] = useState('');
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [editingUser, setEditingUser] = useState<any>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
-  useEffect(() => {
-    fetchUsers();
-  }, []);
+  // The useEmployees hook handles fetching users automatically
 
-  const fetchUsers = async () => {
-    try {
-      setLoading(true);
-      
-      // Fetch all employees (which represent users in our system)
-      const { data, error } = await supabase
-        .from('employees')
-        .select('*')
-        .order('created_at', { ascending: false });
-      
-      if (error) throw error;
-      
-      setUsers(data || []);
-    } catch (error) {
-      console.error('Error fetching users:', error);
-      toast.error('Erro ao carregar usuários');
-    } finally {
-      setLoading(false);
-    }
-  };
+  // This function is now handled by the edit modal
 
-  const updateUserRole = async (userId: string, role: string) => {
-    try {
-      const { error } = await supabase
-        .from('employees')
-        .update({ role })
-        .eq('id', userId);
-      
-      if (error) throw error;
-      
-      // Update local state
-      setUsers(users.map(user => 
-        user.id === userId ? { ...user, role } : user
-      ));
-      
-      toast.success('Papel do usuário atualizado com sucesso');
-    } catch (error) {
-      console.error('Error updating user role:', error);
-      toast.error('Erro ao atualizar papel do usuário');
-    }
-  };
-
-  const toggleUserActive = async (userId: string, currentActive: boolean) => {
-    try {
-      const { error } = await supabase
-        .from('employees')
-        .update({ active: !currentActive })
-        .eq('id', userId);
-      
-      if (error) throw error;
-      
-      // Update local state
-      setUsers(users.map(user => 
-        user.id === userId ? { ...user, active: !currentActive } : user
-      ));
-      
-      toast.success(`Usuário ${!currentActive ? 'ativado' : 'desativado'} com sucesso`);
-    } catch (error) {
-      console.error('Error toggling user active status:', error);
-      toast.error('Erro ao alterar status do usuário');
-    }
-  };
+  // This function is now handled by the edit modal
 
   const deleteUser = async (userId: string) => {
     try {
       setDeletingUserId(userId);
-      
-      const userToDelete = users.find(u => u.id === userId);
-      if (!userToDelete) {
-        toast.error('Usuário não encontrado');
-        return;
-      }
-      
-      // Check if this is the last admin
-      const adminUsers = users.filter(user => user.role === 'Admin' && user.active);
-      if (adminUsers.length <= 1 && userToDelete.role === 'Admin') {
-        toast.error('Não é possível excluir o último administrador do sistema');
-        return;
-      }
-      
-      // Try to delete the employee record
-      const { error } = await supabase
-        .from('employees')
-        .delete()
-        .eq('id', userId);
-      
-      if (error) {
-        console.error('Delete error:', error);
-        
-        // If deletion fails due to foreign key constraints, deactivate instead
-        if (error.code === '23503' || error.message?.includes('violates foreign key constraint')) {
-          await toggleUserActive(userId, true);
-          toast.success('Usuário desativado com sucesso (não foi possível excluir devido a referências no sistema)');
-        } else {
-          throw error;
-        }
-      } else {
-        // Remove from local state
-        setUsers(prevUsers => prevUsers.filter(user => user.id !== userId));
-        toast.success('Usuário excluído com sucesso');
-      }
+      await deleteEmployee(userId);
+      // Força atualização da lista após exclusão bem-sucedida
+      setTimeout(() => {
+        refetch();
+      }, 100);
     } catch (error) {
-      console.error('Error deleting user:', error);
-      toast.error('Erro ao excluir usuário: ' + (error instanceof Error ? error.message : 'Erro desconhecido'));
+      const message = error instanceof Error ? error.message : 'Erro desconhecido';
+      toast.error(message);
     } finally {
       setDeletingUserId(null);
     }
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const getAdditionalRolesBadges = (user: any) => {
     if (!user.permissions) return null;
     
@@ -213,6 +127,30 @@ export default function AdminDashboard() {
     }
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const handleEditUser = (user: any) => {
+    setEditingUser(user);
+    setIsEditModalOpen(true);
+  };
+
+  const handleUserUpdated = () => {
+    console.log('User updated, refreshing list...');
+    refetch(); // Refresh the user list
+  };
+
+  const handleForceRefresh = async () => {
+    try {
+      setIsRefreshing(true);
+      await forceRefresh();
+      toast.success('Lista atualizada com sucesso!');
+    } catch (error) {
+      console.error('Erro ao fazer refresh:', error);
+      toast.error('Erro ao atualizar a lista');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   if (!isAdmin) {
     return (
       <div className="flex flex-col items-center justify-center h-screen">
@@ -235,9 +173,9 @@ export default function AdminDashboard() {
       {/* User Registration Section */}
       <UserRegistrationSection />
 
-      {/* Search */}
-      <div className="mb-6">
-        <div className="relative">
+      {/* Search and Refresh */}
+      <div className="mb-6 flex gap-4">
+        <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-secondary-400" />
           <input
             type="text"
@@ -247,6 +185,15 @@ export default function AdminDashboard() {
             className="w-full pl-10 pr-4 py-2 border border-secondary-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
           />
         </div>
+        <button
+          onClick={handleForceRefresh}
+          disabled={isRefreshing}
+          className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
+          title="Atualizar lista"
+        >
+          <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+          {isRefreshing ? 'Atualizando...' : 'Atualizar'}
+        </button>
       </div>
 
       {/* Users list */}
@@ -295,22 +242,15 @@ export default function AdminDashboard() {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <select
-                        value={user.role}
-                        onChange={(e) => updateUserRole(user.id, e.target.value)}
-                        className="text-sm border border-secondary-300 rounded-md p-1"
-                      >
-                        <option value="Admin">Administrador</option>
-                        <option value="Manager">Gerente</option>
-                        <option value="Mechanic">Mecânico</option>
-                        <option value="PatioInspector">Inspetor</option>
-                        <option value="Sales">Vendedor</option>
-                        <option value="Driver">Motorista</option>
-                        <option value="FineAdmin">Admin de Multas</option>
-                        <option value="Inventory">Estoquista</option>
-                        <option value="Finance">Financeiro</option>
-                        <option value="Compras">Compras</option>
-                      </select>
+                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                        user.role === 'Admin' ? 'bg-error-100 text-error-800' :
+                        user.role === 'Manager' ? 'bg-primary-100 text-primary-800' :
+                        user.role === 'Mechanic' ? 'bg-warning-100 text-warning-800' :
+                        user.role === 'PatioInspector' ? 'bg-info-100 text-info-800' :
+                        'bg-secondary-100 text-secondary-800'
+                      }`}>
+                        {JOB_ROLES[user.role as keyof typeof JOB_ROLES]?.name || user.role}
+                      </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
@@ -326,20 +266,13 @@ export default function AdminDashboard() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <button
-                        onClick={() => toast.success('Funcionalidade em desenvolvimento')}
+                        onClick={() => handleEditUser(user)}
                         className="text-primary-600 hover:text-primary-900 mr-4"
+                        title="Editar usuário"
                       >
                         <Edit className="h-4 w-4" />
                       </button>
-                      <button
-                        onClick={() => toggleUserActive(user.id, user.active)}
-                        className={`${
-                          user.active ? 'text-error-600 hover:text-error-900' : 'text-success-600 hover:text-success-900'
-                        } mr-4`}
-                        title={user.active ? 'Desativar usuário' : 'Ativar usuário'}
-                      >
-                        {user.active ? 'Desativar' : 'Ativar'}
-                      </button>
+
                       <button
                         onClick={() => handleDeleteUser(user.id)}
                         className="text-error-600 hover:text-error-900"
@@ -368,6 +301,14 @@ export default function AdminDashboard() {
           </div>
         )}
       </div>
+
+      {/* User Edit Modal */}
+      <UserEditModal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        user={editingUser}
+        onUserUpdated={handleUserUpdated}
+      />
     </div>
   );
 }

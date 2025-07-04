@@ -82,19 +82,12 @@ export const ContractSelector: React.FC<ContractSelectorProps> = ({
             <label className="block text-sm font-medium text-success-800 mb-2">
               Contrato Selecionado:
             </label>
-            <select
-              name="contract_id"
-              value={contractId}
-              onChange={onChange}
-              className="w-full border border-success-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-success-500 bg-white"
-            >
-              <option value="">Nenhum (sem contrato)</option>
-              {availableContracts.map(contract => (
-                <option key={contract.id} value={contract.id}>
-                  {contract.customers?.name} - {new Date(contract.start_date).toLocaleDateString('pt-BR')} a {new Date(contract.end_date).toLocaleDateString('pt-BR')}
-                </option>
-              ))}
-            </select>
+            <input
+              type="text"
+              readOnly
+              value={activeContract ? `${activeContract.customers?.name} - ${new Date(activeContract.start_date).toLocaleDateString('pt-BR')} a ${new Date(activeContract.end_date).toLocaleDateString('pt-BR')}` : 'Nenhum (sem contrato)'}
+              className="w-full border border-success-300 rounded-lg px-3 py-2 bg-gray-100 text-gray-700 cursor-not-allowed"
+            />
             <p className="text-xs text-success-700 mt-1">
               ✓ Contrato automaticamente selecionado com base no veículo
             </p>

@@ -13,6 +13,8 @@ export interface Vehicle {
   location: string;
   acquisitionDate: string;
   acquisitionValue: number;
+  mileage: number;
+  initial_mileage: number;
   totalCosts?: number;
   status: 'Disponível' | 'Em Uso' | 'Manutenção' | 'Inativo';
 }

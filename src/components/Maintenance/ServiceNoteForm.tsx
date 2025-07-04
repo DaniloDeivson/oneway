@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '../UI/Button';
-import { Badge } from '../UI/Badge';
-import { Calendar, Car, User, Loader2, Package, AlertTriangle, ShoppingCart, Wrench } from 'lucide-react';
-import { ResponsibleField } from '../UI/ResponsibleField';
+import { Calendar, Loader2, Package, ShoppingCart, Wrench, Trash2 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
-import { PartCartItem } from '../../hooks/useServiceOrderParts';
+import { PartCartItem, useServiceOrderParts } from '../../hooks/useServiceOrderParts';
 
 interface ServiceNoteFormProps {
   onSubmit: (data: any, partsCart?: PartCartItem[]) => Promise<void>;
@@ -44,6 +42,9 @@ export const ServiceNoteForm: React.FC<ServiceNoteFormProps> = ({
     observations: serviceNote?.observations || '',
     status: serviceNote?.status || 'Aberta'
   });
+  
+  // Hook para buscar peças já utilizadas (quando editando uma ordem existente)
+  const { serviceOrderParts, removePartFromServiceOrder } = useServiceOrderParts(serviceNote?.id);
 
   // Filter mechanics to only show employees with Mechanic role
   const mechanicEmployees = mechanics.filter(emp => emp.role === 'Mechanic' && emp.active);
@@ -316,7 +317,7 @@ export const ServiceNoteForm: React.FC<ServiceNoteFormProps> = ({
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
           <h3 className="text-lg font-semibold text-secondary-900 flex items-center">
             <Package className="h-5 w-5 mr-2" />
-            Peças {serviceNote ? 'Utilizadas' : 'a Utilizar'} ({partsCount})
+            Peças {serviceNote ? 'Utilizadas' : 'a Utilizar'} ({serviceNote ? serviceOrderParts.length : partsCount})
           </h3>
           <Button
             type="button"
@@ -329,7 +330,71 @@ export const ServiceNoteForm: React.FC<ServiceNoteFormProps> = ({
           </Button>
         </div>
 
-        {partsCount > 0 ? (
+        {/* Peças já utilizadas (ordem existente) */}
+        {serviceNote && serviceOrderParts.length > 0 && (
+          <div className="mb-4">
+            <h4 className="text-sm font-medium text-secondary-700 mb-2">Peças já utilizadas</h4>
+            <div className="overflow-x-auto">
+              <table className="w-full border border-secondary-200 rounded-lg">
+                <thead className="bg-secondary-50">
+                  <tr>
+                    <th className="text-left py-2 px-3 text-xs font-medium text-secondary-600">SKU</th>
+                    <th className="text-left py-2 px-3 text-xs font-medium text-secondary-600">Peça</th>
+                    <th className="text-left py-2 px-3 text-xs font-medium text-secondary-600">Qtd</th>
+                    <th className="text-left py-2 px-3 text-xs font-medium text-secondary-600">Valor Unit.</th>
+                    <th className="text-left py-2 px-3 text-xs font-medium text-secondary-600">Total</th>
+                    <th className="text-left py-2 px-3 text-xs font-medium text-secondary-600">Ações</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-secondary-200">
+                  {serviceOrderParts.map((part) => (
+                    <tr key={part.id} className="hover:bg-secondary-50">
+                      <td className="py-2 px-3 text-xs font-medium text-secondary-900">
+                        {part.parts?.sku || 'N/A'}
+                      </td>
+                      <td className="py-2 px-3 text-xs text-secondary-700">
+                        {part.parts?.name || 'Peça não encontrada'}
+                      </td>
+                      <td className="py-2 px-3 text-xs text-secondary-700">
+                        {part.quantity_used}
+                      </td>
+                      <td className="py-2 px-3 text-xs text-secondary-700">
+                        R$ {part.unit_cost_at_time.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="py-2 px-3 text-xs font-medium text-secondary-900">
+                        R$ {part.total_cost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="py-2 px-3">
+                        <button 
+                          type="button"
+                          onClick={() => removePartFromServiceOrder(part.id)}
+                          className="text-error-600 hover:text-error-700"
+                          title="Remover peça"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="bg-secondary-50">
+                  <tr>
+                    <td colSpan={4} className="py-2 px-3 text-xs font-medium text-secondary-900 text-right">
+                      Total das Peças:
+                    </td>
+                    <td className="py-2 px-3 text-xs font-bold text-primary-600">
+                      R$ {serviceOrderParts.reduce((sum, part) => sum + part.total_cost, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </td>
+                    <td></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Carrinho de peças (nova ordem) */}
+        {!serviceNote && partsCount > 0 && (
           <div className="bg-secondary-50 p-3 rounded-lg">
             <div className="flex justify-between items-center text-sm">
               <span className="text-secondary-600">Total de peças:</span>
@@ -350,7 +415,10 @@ export const ServiceNoteForm: React.FC<ServiceNoteFormProps> = ({
               </div>
             </div>
           </div>
-        ) : (
+        )}
+
+        {/* Quando não há peças */}
+        {((serviceNote && serviceOrderParts.length === 0) || (!serviceNote && partsCount === 0)) && (
           <div className="text-center py-6 text-secondary-500">
             <Package className="h-8 w-8 mx-auto mb-2" />
             <p>Nenhuma peça {serviceNote ? 'adicionada ainda' : 'selecionada'}</p>

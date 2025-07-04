@@ -3,7 +3,20 @@ import { Button } from '../UI/Button';
 import { Calendar, DollarSign, Car, Loader2, Gauge, Users } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useVehicles } from '../../hooks/useVehicles';
+import { useContracts } from '../../hooks/useContracts';
 import { MultipleVehicleSelector } from './MultipleVehicleSelector';
+import { Database } from '../../types/database';
+
+type Vehicle = Database['public']['Tables']['vehicles']['Row'];
+
+interface AvailableVehicle {
+  id: string;
+  plate: string;
+  model: string;
+  year: number;
+  type: string;
+  status: string;
+}
 
 // Definir tipos explícitos para os dados do contrato, cliente e funcionário
 interface Customer {
@@ -43,6 +56,7 @@ interface ContractFormProps {
   onSubmit: (data: ContractFormData) => Promise<void>;
   onCancel: () => void;
   contract?: Partial<ContractFormData> & {
+    id?: string;
     contract_vehicles?: Array<{
       vehicle_id: string;
       daily_rate: number | null;
@@ -63,6 +77,9 @@ export const ContractForm: React.FC<ContractFormProps> = ({
 }) => {
   const { user, isAdmin, isManager, hasPermission } = useAuth();
   const { vehicles, loading: loadingAllVehicles } = useVehicles();
+  const { getAvailableVehicles, checkContractConflicts } = useContracts();
+  const [availableVehicles, setAvailableVehicles] = useState<AvailableVehicle[]>([]);
+  const [loadingAvailableVehicles, setLoadingAvailableVehicles] = useState(false);
   const [useMultipleVehicles, setUseMultipleVehicles] = useState(
     contract?.uses_multiple_vehicles || false
   );
@@ -112,6 +129,13 @@ export const ContractForm: React.FC<ContractFormProps> = ({
     }
   }, [contract, user, hasPermission, isAdmin, isManager, salespeople, formData.salesperson_id]);
 
+  // Fetch available vehicles when component loads if dates are already set
+  useEffect(() => {
+    if (formData.start_date && formData.end_date) {
+      fetchAvailableVehicles(formData.start_date, formData.end_date);
+    }
+  }, []);  // Apenas na inicialização
+
   // Update form data when multiple vehicles toggle changes
   useEffect(() => {
     setFormData(prev => ({
@@ -142,9 +166,36 @@ export const ContractForm: React.FC<ContractFormProps> = ({
         alert('Todos os veículos devem ter um valor diário válido.');
         return;
       }
+
+      // Verificar conflitos de data para múltiplos veículos
+      const vehicleIds = selectedVehicles.map(v => v.vehicle_id);
+      const conflicts = await checkContractConflicts(
+        vehicleIds, 
+        formData.start_date, 
+        formData.end_date, 
+        contract?.id
+      );
+      
+      if (conflicts.has_conflict) {
+        alert('Um ou mais veículos não estão disponíveis no período selecionado. Há conflitos com outros contratos.');
+        return;
+      }
     } else {
       if (!formData.vehicle_id) {
         alert('Selecione um veículo.');
+        return;
+      }
+
+      // Verificar conflitos de data para veículo único  
+      const conflicts = await checkContractConflicts(
+        [formData.vehicle_id], 
+        formData.start_date, 
+        formData.end_date,
+        contract?.id
+      );
+      
+      if (conflicts.has_conflict) {
+        alert('Veículo não disponível no período selecionado. Há conflitos com outros contratos.');
         return;
       }
     }
@@ -171,6 +222,24 @@ export const ContractForm: React.FC<ContractFormProps> = ({
     const { name, value } = e.target;
     const newFormData = { ...formData, [name]: value };
     setFormData(newFormData);
+    
+    // Se ambas as datas estão preenchidas, buscar veículos disponíveis
+    if (newFormData.start_date && newFormData.end_date) {
+      await fetchAvailableVehicles(newFormData.start_date, newFormData.end_date);
+    }
+  };
+
+  const fetchAvailableVehicles = async (startDate: string, endDate: string) => {
+    try {
+      setLoadingAvailableVehicles(true);
+      const available = await getAvailableVehicles(startDate, endDate, contract?.id);
+      setAvailableVehicles(available);
+    } catch (error) {
+      console.error('Erro ao buscar veículos disponíveis:', error);
+      setAvailableVehicles([]);
+    } finally {
+      setLoadingAvailableVehicles(false);
+    }
   };
 
   const handleVehicleToggle = (useMultiple: boolean) => {
@@ -350,7 +419,7 @@ export const ContractForm: React.FC<ContractFormProps> = ({
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-secondary-700 mb-2">
-              Veículo * {loadingAllVehicles && <span className="text-xs text-secondary-500">(Carregando...)</span>}
+              Veículo * {(loadingAllVehicles || loadingAvailableVehicles) && <span className="text-xs text-secondary-500">(Carregando...)</span>}
             </label>
             <div className="relative">
               <Car className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-secondary-400" />
@@ -363,11 +432,17 @@ export const ContractForm: React.FC<ContractFormProps> = ({
                 disabled={loadingAllVehicles}
               >
                 <option value="">
-                  {loadingAllVehicles ? 'Carregando veículos...' : 'Selecione um veículo da frota'}
+                  {(loadingAllVehicles || loadingAvailableVehicles) ? 'Carregando veículos...' : 
+                   (formData.start_date && formData.end_date && availableVehicles.length === 0) ? 
+                   'Nenhum veículo disponível no período' : 
+                   'Selecione um veículo da frota'}
                 </option>
-                {vehicles.map(vehicle => (
+                {(availableVehicles.length > 0 && formData.start_date && formData.end_date ? 
+                  availableVehicles : 
+                  vehicles.filter(v => v.status === 'Disponível')
+                ).map(vehicle => (
                   <option key={vehicle.id} value={vehicle.id}>
-                    {vehicle.plate} - {vehicle.model} ({vehicle.year})
+                    {vehicle.plate} - {vehicle.model} ({vehicle.year}) - {vehicle.status}
                   </option>
                 ))}
               </select>
@@ -402,7 +477,10 @@ export const ContractForm: React.FC<ContractFormProps> = ({
           selectedVehicles={selectedVehicles}
           onVehiclesChange={setSelectedVehicles}
           defaultDailyRate={formData.daily_rate}
-          disabled={loadingAllVehicles}
+          disabled={loadingAllVehicles || loadingAvailableVehicles}
+          startDate={formData.start_date}
+          endDate={formData.end_date}
+          availableVehicles={availableVehicles.length > 0 ? availableVehicles : undefined}
         />
       )}
 

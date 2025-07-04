@@ -75,6 +75,7 @@ export const Fines: React.FC = () => {
   const [infractionFilter, setInfractionFilter] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedFine, setSelectedFine] = useState<any>(undefined);
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
 
   const canManageFines = isAdmin || isManager || hasPermission('fines');
 
@@ -122,6 +123,11 @@ export const Fines: React.FC = () => {
   const handleNew = () => {
     setSelectedFine(undefined);
     setIsModalOpen(true);
+  };
+
+  const handleView = (fine: any) => {
+    setSelectedFine(fine);
+    setIsViewModalOpen(true);
   };
 
   const handleSave = async (data: any) => {
@@ -372,7 +378,10 @@ export const Fines: React.FC = () => {
                         >
                           {fine.notified ? <BellOff className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
                         </button>
-                        <button className="p-2 text-secondary-400 hover:text-secondary-600">
+                        <button 
+                          onClick={() => handleView(fine)}
+                          className="p-2 text-secondary-400 hover:text-secondary-600"
+                        >
                           <Eye className="h-4 w-4" />
                         </button>
                         <button 
@@ -477,7 +486,10 @@ export const Fines: React.FC = () => {
                           >
                             {getNotificationBadge(fine.notified)}
                           </button>
-                          <button className="p-1 text-secondary-400 hover:text-secondary-600">
+                          <button 
+                            onClick={() => handleView(fine)}
+                            className="p-1 text-secondary-400 hover:text-secondary-600"
+                          >
                             <Eye className="h-4 w-4" />
                           </button>
                           <button 
@@ -495,7 +507,10 @@ export const Fines: React.FC = () => {
                         </div>
                       ) : (
                         <div className="flex items-center space-x-2">
-                          <button className="p-1 text-secondary-400 hover:text-secondary-600">
+                          <button 
+                            onClick={() => handleView(fine)}
+                            className="p-1 text-secondary-400 hover:text-secondary-600"
+                          >
                             <Eye className="h-4 w-4" />
                           </button>
                         </div>
@@ -525,6 +540,169 @@ export const Fines: React.FC = () => {
         employees={employees}
         onSave={handleSave}
       />
+
+      {/* View Fine Modal */}
+      {isViewModalOpen && selectedFine && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-4 lg:p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-semibold text-secondary-900">
+                Detalhes da Multa
+              </h2>
+              <button 
+                onClick={() => setIsViewModalOpen(false)}
+                className="text-secondary-400 hover:text-secondary-600 p-2"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Informações da Multa */}
+              <div className="space-y-4">
+                <div className="border border-secondary-200 rounded-lg p-4">
+                  <h3 className="text-lg font-medium text-secondary-900 mb-3">Informações da Multa</h3>
+                  <div className="space-y-3">
+                    <div className="flex justify-between">
+                      <span className="text-secondary-600">Número da Multa:</span>
+                      <span className="font-medium">{selectedFine.fine_number}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-secondary-600">Tipo de Infração:</span>
+                      <span className="font-medium">{selectedFine.infraction_type}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-secondary-600">Data da Infração:</span>
+                      <span className="font-medium">{new Date(selectedFine.infraction_date).toLocaleDateString('pt-BR')}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-secondary-600">Local:</span>
+                      <span className="font-medium">{selectedFine.location || 'Não informado'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-secondary-600">Valor:</span>
+                      <span className="font-medium text-error-600">R$ {selectedFine.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-secondary-600">Vencimento:</span>
+                      <span className="font-medium">{selectedFine.due_date ? new Date(selectedFine.due_date).toLocaleDateString('pt-BR') : 'Não informado'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-secondary-600">Status:</span>
+                      <span>{getStatusBadge(selectedFine.status)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-secondary-600">Notificado:</span>
+                      <span>{getNotificationBadge(selectedFine.notified)}</span>
+                    </div>
+                    {isOverdue(selectedFine) && (
+                      <div className="flex justify-between">
+                        <span className="text-secondary-600">Situação:</span>
+                        <Badge variant="error">Vencida</Badge>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Observações */}
+                {selectedFine.observations && (
+                  <div className="border border-secondary-200 rounded-lg p-4">
+                    <h3 className="text-lg font-medium text-secondary-900 mb-3">Observações</h3>
+                    <p className="text-secondary-700">{selectedFine.observations}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Informações do Veículo e Motorista */}
+              <div className="space-y-4">
+                <div className="border border-secondary-200 rounded-lg p-4">
+                  <h3 className="text-lg font-medium text-secondary-900 mb-3">Veículo</h3>
+                  <div className="space-y-3">
+                    <div className="flex justify-between">
+                      <span className="text-secondary-600">Placa:</span>
+                      <span className="font-medium">{selectedFine.vehicles?.plate || 'Não informado'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-secondary-600">Modelo:</span>
+                      <span className="font-medium">{selectedFine.vehicles?.model || 'Não informado'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-secondary-600">Marca:</span>
+                      <span className="font-medium">{selectedFine.vehicles?.brand || 'Não informado'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-secondary-600">Ano:</span>
+                      <span className="font-medium">{selectedFine.vehicles?.year || 'Não informado'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border border-secondary-200 rounded-lg p-4">
+                  <h3 className="text-lg font-medium text-secondary-900 mb-3">Motorista</h3>
+                  <div className="space-y-3">
+                    <div className="flex justify-between">
+                      <span className="text-secondary-600">Nome:</span>
+                      <span className="font-medium">{selectedFine.drivers?.name || 'Não informado'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-secondary-600">CPF:</span>
+                      <span className="font-medium">{selectedFine.drivers?.cpf || 'Não informado'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-secondary-600">CNH:</span>
+                      <span className="font-medium">{selectedFine.drivers?.license_number || 'Não informado'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-secondary-600">Telefone:</span>
+                      <span className="font-medium">{selectedFine.drivers?.phone || 'Não informado'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border border-secondary-200 rounded-lg p-4">
+                  <h3 className="text-lg font-medium text-secondary-900 mb-3">Responsável</h3>
+                  <div className="space-y-3">
+                    <div className="flex justify-between">
+                      <span className="text-secondary-600">Registrado por:</span>
+                      <span className="font-medium">{selectedFine.created_by_name || getResponsibleName(selectedFine.employee_id)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-secondary-600">Data de Registro:</span>
+                      <span className="font-medium">{new Date(selectedFine.created_at).toLocaleDateString('pt-BR')}</span>
+                    </div>
+                    {selectedFine.updated_at && selectedFine.updated_at !== selectedFine.created_at && (
+                      <div className="flex justify-between">
+                        <span className="text-secondary-600">Última Atualização:</span>
+                        <span className="font-medium">{new Date(selectedFine.updated_at).toLocaleDateString('pt-BR')}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end mt-6 space-x-4">
+              <Button 
+                variant="secondary" 
+                onClick={() => setIsViewModalOpen(false)}
+              >
+                Fechar
+              </Button>
+              {canManageFines && (
+                <Button 
+                  onClick={() => {
+                    setIsViewModalOpen(false);
+                    handleEdit(selectedFine);
+                  }}
+                >
+                  <Edit className="h-4 w-4 mr-2" />
+                  Editar
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -5,51 +5,148 @@ import { Badge } from '../components/UI/Badge';
 import { useVehicles } from '../hooks/useVehicles';
 import { useCosts } from '../hooks/useCosts';
 import { useContracts } from '../hooks/useContracts';
-import { Plus, Search, Filter, Car, DollarSign, Loader2, Edit, Eye, Trash2, Calendar, MapPin, Fuel, Gauge, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { useAuth } from '../hooks/useAuth';
+import { Plus, Search, Filter, Car, DollarSign, Loader2, Edit, Eye, Trash2, Gauge, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { Database } from '../types/database';
+import { supabase } from '../lib/supabase';
+
+type Vehicle = Database['public']['Tables']['vehicles']['Row'];
+type Contract = Database['public']['Tables']['contracts']['Row'];
 
 // Tipos para ordenação
-type SortField = 'plate' | 'model' | 'year' | 'status' | 'totalCost' | 'location';
+type SortField = 'plate' | 'model' | 'year' | 'status' | 'totalCost' | 'location' | 'total_mileage' | 'initial_mileage';
 type SortDirection = 'asc' | 'desc';
 
-interface VehicleWithCosts {
-  id: string; 
+interface VehicleWithCosts extends Omit<Vehicle, 'mileage'> {
+  totalCost: number;
+  actualStatus: 'Disponível' | 'Manutenção' | 'Em Uso' | 'Inativo';
+  contractInfo?: Contract;
+  total_mileage: number;
+  mileage: number;
+  tank_capacity: number;
+  initial_mileage: number;
+}
+
+interface VehicleFormData {
   plate: string;
   model: string;
   year: number;
-  type: string;
-  status: string;
-  location?: string | null;
-  totalCost: number;
-  actualStatus: string;
-  contractInfo?: any;
-  [key: string]: any;
+  type: 'Furgão' | 'Van';
+  color: string | null;
+  fuel: 'Diesel' | 'Gasolina' | 'Elétrico' | null;
+  category: string;
+  chassis: string | null;
+  renavam: string | null;
+  cargo_capacity: number | null;
+  location: string | null;
+  acquisition_date: string | null;
+  acquisition_value: number | null;
+  status: 'Disponível' | 'Em Uso' | 'Manutenção' | 'Inativo';
+  mileage: number;
+  initial_mileage: number;
+  tank_capacity: number;
+}
+
+interface VehicleModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  vehicle?: VehicleWithCosts;
+  onSave: (data: Partial<VehicleFormData>) => Promise<void>;
+}
+
+interface VehicleDetailModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  vehicle?: VehicleWithCosts;
+  costs: Array<Database['public']['Tables']['costs']['Row']>;
 }
 
 // Modal para editar/adicionar veículo
-const VehicleModal: React.FC<{
-  isOpen: boolean;
-  onClose: () => void;
-  vehicle?: any;
-  onSave: (data: any) => Promise<void>;
-}> = ({ isOpen, onClose, vehicle, onSave }) => {
+const VehicleModal: React.FC<VehicleModalProps> = ({ isOpen, onClose, vehicle, onSave }) => {
   const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<VehicleFormData>({
     plate: vehicle?.plate || '',
     model: vehicle?.model || '',
     year: vehicle?.year || new Date().getFullYear(),
     type: vehicle?.type || 'Furgão',
-    color: vehicle?.color || '',
+    color: vehicle?.color || null,
     fuel: vehicle?.fuel || 'Diesel',
     category: vehicle?.category || '',
-    chassis: vehicle?.chassis || '',
-    renavam: vehicle?.renavam || '',
-    cargo_capacity: vehicle?.cargo_capacity || 0,
-    location: vehicle?.location || '',
-    acquisition_date: vehicle?.acquisition_date || '',
-    acquisition_value: vehicle?.acquisition_value || 0,
-    status: vehicle?.status || 'Disponível'
+    chassis: vehicle?.chassis || null,
+    renavam: vehicle?.renavam || null,
+    cargo_capacity: vehicle?.cargo_capacity || null,
+    location: vehicle?.location || null,
+    acquisition_date: vehicle?.acquisition_date || null,
+    acquisition_value: vehicle?.acquisition_value || null,
+    status: vehicle?.status || 'Disponível',
+    mileage: vehicle?.mileage || 0,
+    initial_mileage: vehicle?.initial_mileage || vehicle?.mileage || 0,
+    tank_capacity: vehicle?.tank_capacity || 0
   });
+
+  // Buscar quilometragem total do veículo
+  const [totalMileage, setTotalMileage] = useState<number>(vehicle?.total_mileage || 0);
+
+  const { user } = useAuth();
+
+  useEffect(() => {
+    if (vehicle?.id) {
+      // Buscar quilometragem total
+      supabase
+        .rpc('fn_calculate_vehicle_total_mileage', { p_vehicle_id: vehicle.id })
+        .then(({ data, error }) => {
+          if (!error && data) {
+            setTotalMileage(data);
+          }
+        });
+    }
+  }, [vehicle]);
+
+  useEffect(() => {
+    if (vehicle) {
+      setFormData({
+        plate: vehicle.plate || '',
+        model: vehicle.model || '',
+        year: vehicle.year || new Date().getFullYear(),
+        type: vehicle.type || 'Furgão',
+        color: vehicle.color || null,
+        fuel: vehicle.fuel || 'Diesel',
+        category: vehicle.category || '',
+        chassis: vehicle.chassis || null,
+        renavam: vehicle.renavam || null,
+        cargo_capacity: vehicle.cargo_capacity || null,
+        location: vehicle.location || null,
+        acquisition_date: vehicle.acquisition_date || null,
+        acquisition_value: vehicle.acquisition_value || null,
+        status: vehicle.status || 'Disponível',
+        mileage: vehicle.mileage || 0,
+        initial_mileage: vehicle.initial_mileage || vehicle.mileage || 0,
+        tank_capacity: vehicle.tank_capacity || 0
+      });
+    } else {
+      // Reset form for new vehicle
+      setFormData({
+        plate: '',
+        model: '',
+        year: new Date().getFullYear(),
+        type: 'Furgão',
+        color: null,
+        fuel: 'Diesel',
+        category: '',
+        chassis: null,
+        renavam: null,
+        cargo_capacity: null,
+        location: null,
+        acquisition_date: null,
+        acquisition_value: null,
+        status: 'Disponível',
+        mileage: 0,
+        initial_mileage: 0,
+        tank_capacity: 0
+      });
+    }
+  }, [vehicle]);
 
   if (!isOpen) return null;
 
@@ -57,16 +154,40 @@ const VehicleModal: React.FC<{
     e.preventDefault();
     setLoading(true);
     try {
-      const submitData = {
+      if (formData.initial_mileage < 0) {
+        toast.error('A quilometragem inicial não pode ser negativa!');
+        setLoading(false);
+        return;
+      }
+      if (!user) {
+        toast.error('Usuário não autenticado!');
+        setLoading(false);
+        return;
+      }
+      const tenant_id = user.tenant_id || '';
+      if (!tenant_id) {
+        toast.error('tenant_id não encontrado para o usuário!');
+        setLoading(false);
+        return;
+      }
+            const submitData = {
         ...formData,
         year: Number(formData.year),
-        cargo_capacity: formData.cargo_capacity ? Number(formData.cargo_capacity) : null,
-        acquisition_value: formData.acquisition_value ? Number(formData.acquisition_value) : null,
-        color: formData.color || null,
-        chassis: formData.chassis || null,
-        renavam: formData.renavam || null,
-        location: formData.location || null,
-        acquisition_date: formData.acquisition_date || null
+        cargo_capacity: formData.cargo_capacity !== null && formData.cargo_capacity !== undefined ? Number(formData.cargo_capacity) : 0,
+        acquisition_value: formData.acquisition_value !== null && formData.acquisition_value !== undefined ? Number(formData.acquisition_value) : 0,
+        color: formData.color && formData.color.trim() !== '' ? formData.color : null,
+        chassis: formData.chassis && formData.chassis.trim() !== '' ? formData.chassis : null,
+        renavam: formData.renavam && formData.renavam.trim() !== '' ? formData.renavam : null,
+        location: formData.location && formData.location.trim() !== '' ? formData.location : null,
+        acquisition_date: formData.acquisition_date && formData.acquisition_date.trim() !== '' ? formData.acquisition_date : null,
+        tank_capacity: formData.tank_capacity !== null && formData.tank_capacity !== undefined ? Number(formData.tank_capacity) : 0,
+        // Usar initial_mileage do formulário e preservar mileage existente para edições
+        initial_mileage: formData.initial_mileage,
+        // Para novos veículos, definir mileage igual ao initial_mileage
+        // Para edições, não alterar o mileage existente
+        ...(vehicle ? {} : { mileage: formData.initial_mileage }),
+        // Só incluir tenant_id para novos veículos
+        ...(vehicle ? {} : { tenant_id })
       };
       await onSave(submitData);
       onClose();
@@ -82,7 +203,7 @@ const VehicleModal: React.FC<{
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: ['year', 'cargo_capacity', 'acquisition_value'].includes(name) 
+      [name]: ['year', 'cargo_capacity', 'acquisition_value', 'mileage', 'initial_mileage', 'tank_capacity'].includes(name) 
         ? Number(value) || 0 
         : value
     }));
@@ -109,7 +230,7 @@ const VehicleModal: React.FC<{
               <input
                 type="text"
                 name="plate"
-                value={formData.plate}
+                value={formData.plate ?? ''}
                 onChange={handleChange}
                 className="w-full border border-secondary-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
                 placeholder="ABC1234"
@@ -123,7 +244,7 @@ const VehicleModal: React.FC<{
               <input
                 type="text"
                 name="model"
-                value={formData.model}
+                value={formData.model ?? ''}
                 onChange={handleChange}
                 className="w-full border border-secondary-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
                 placeholder="Fiat Ducato"
@@ -137,7 +258,7 @@ const VehicleModal: React.FC<{
               <input
                 type="number"
                 name="year"
-                value={formData.year}
+                value={formData.year ?? 0}
                 onChange={handleChange}
                 className="w-full border border-secondary-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
                 min="2000"
@@ -154,7 +275,7 @@ const VehicleModal: React.FC<{
               </label>
               <select
                 name="type"
-                value={formData.type}
+                value={formData.type ?? ''}
                 onChange={handleChange}
                 className="w-full border border-secondary-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
                 required
@@ -170,7 +291,7 @@ const VehicleModal: React.FC<{
               <input
                 type="text"
                 name="color"
-                value={formData.color}
+                value={formData.color ?? ''}
                 onChange={handleChange}
                 className="w-full border border-secondary-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
                 placeholder="Branco"
@@ -182,7 +303,7 @@ const VehicleModal: React.FC<{
               </label>
               <select
                 name="fuel"
-                value={formData.fuel}
+                value={formData.fuel ?? ''}
                 onChange={handleChange}
                 className="w-full border border-secondary-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
               >
@@ -201,7 +322,7 @@ const VehicleModal: React.FC<{
               <input
                 type="text"
                 name="category"
-                value={formData.category}
+                value={formData.category ?? ''}
                 onChange={handleChange}
                 className="w-full border border-secondary-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
                 placeholder="Carga/Passageiros"
@@ -215,7 +336,7 @@ const VehicleModal: React.FC<{
               <input
                 type="text"
                 name="chassis"
-                value={formData.chassis}
+                value={formData.chassis ?? ''}
                 onChange={handleChange}
                 className="w-full border border-secondary-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
                 placeholder="9BWHE21JX24060960"
@@ -228,7 +349,7 @@ const VehicleModal: React.FC<{
               <input
                 type="text"
                 name="renavam"
-                value={formData.renavam}
+                value={formData.renavam ?? ''}
                 onChange={handleChange}
                 className="w-full border border-secondary-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
                 placeholder="00123456789"
@@ -244,7 +365,7 @@ const VehicleModal: React.FC<{
               <input
                 type="number"
                 name="cargo_capacity"
-                value={formData.cargo_capacity}
+                value={formData.cargo_capacity ?? ''}
                 onChange={handleChange}
                 className="w-full border border-secondary-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
                 min="0"
@@ -257,7 +378,7 @@ const VehicleModal: React.FC<{
               <input
                 type="text"
                 name="location"
-                value={formData.location}
+                value={formData.location ?? ''}
                 onChange={handleChange}
                 className="w-full border border-secondary-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
                 placeholder="São Paulo - SP"
@@ -269,7 +390,7 @@ const VehicleModal: React.FC<{
               </label>
               <select
                 name="status"
-                value={formData.status}
+                value={formData.status ?? ''}
                 onChange={handleChange}
                 className="w-full border border-secondary-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
                 required
@@ -285,12 +406,50 @@ const VehicleModal: React.FC<{
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-secondary-700 mb-2">
+                Quilometragem Inicial (km) *
+              </label>
+              <div className="relative">
+                <Gauge className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-secondary-400" />
+                <input
+                  type="number"
+                  name="initial_mileage"
+                  value={formData.initial_mileage !== null && formData.initial_mileage !== undefined ? formData.initial_mileage : ''}
+                  onChange={handleChange}
+                  className="w-full pl-10 pr-4 py-2 border border-secondary-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  min="0"
+                  required
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-secondary-700 mb-2">
+                Quilometragem Total (km)
+              </label>
+              <div className="relative">
+                <Gauge className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-secondary-400" />
+                <input
+                  type="text"
+                  value={totalMileage.toLocaleString('pt-BR')}
+                  className="w-full pl-10 pr-4 py-2 bg-secondary-50 border border-secondary-300 rounded-lg text-secondary-700"
+                  disabled
+                />
+              </div>
+              <p className="mt-1 text-xs text-secondary-500">
+                Quilometragem total acumulada incluindo inspeções
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-secondary-700 mb-2">
                 Data de Aquisição
               </label>
               <input
                 type="date"
                 name="acquisition_date"
-                value={formData.acquisition_date}
+                value={formData.acquisition_date ?? ''}
                 onChange={handleChange}
                 className="w-full border border-secondary-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
               />
@@ -302,11 +461,28 @@ const VehicleModal: React.FC<{
               <input
                 type="number"
                 name="acquisition_value"
-                value={formData.acquisition_value}
+                value={formData.acquisition_value ?? ''}
                 onChange={handleChange}
                 className="w-full border border-secondary-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
                 min="0"
                 step="0.01"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-secondary-700 mb-2">
+                Capacidade do Tanque (litros) *
+              </label>
+              <input
+                type="number"
+                name="tank_capacity"
+                value={formData.tank_capacity ?? ''}
+                onChange={handleChange}
+                className="w-full border border-secondary-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                min="1"
+                required
               />
             </div>
           </div>
@@ -327,12 +503,7 @@ const VehicleModal: React.FC<{
 };
 
 // Modal para visualizar detalhes do veículo
-const VehicleDetailModal: React.FC<{
-  isOpen: boolean;
-  onClose: () => void;
-  vehicle?: any;
-  costs: any[];
-}> = ({ isOpen, onClose, vehicle, costs }) => {
+const VehicleDetailModal: React.FC<VehicleDetailModalProps> = ({ isOpen, onClose, vehicle, costs }) => {
   if (!isOpen || !vehicle) return null;
 
   const vehicleCosts = costs.filter(cost => cost.vehicle_id === vehicle.id);
@@ -422,6 +593,17 @@ const VehicleDetailModal: React.FC<{
             <div>
               <p className="text-sm text-secondary-600">Valor de Aquisição:</p>
               <p className="font-medium">{vehicle.acquisition_value ? `R$ ${vehicle.acquisition_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'Não informado'}</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+            <div className="bg-primary-50 p-4 rounded-lg flex items-center justify-between">
+              <span className="text-lg font-semibold text-primary-900">Quilometragem Inicial</span>
+              <span className="text-2xl font-bold text-primary-700">{(vehicle.initial_mileage || 0).toLocaleString('pt-BR')} km</span>
+            </div>
+            <div className="bg-info-50 p-4 rounded-lg flex items-center justify-between">
+              <span className="text-lg font-semibold text-info-900">Quilometragem Total</span>
+              <span className="text-2xl font-bold text-info-700">{(vehicle.total_mileage || 0).toLocaleString('pt-BR')} km</span>
             </div>
           </div>
         </div>
@@ -514,6 +696,7 @@ export const Fleet: React.FC = () => {
   const { vehicles, loading, createVehicle, updateVehicle, deleteVehicle } = useVehicles();
   const { costs } = useCosts();
   const { contracts } = useContracts();
+  const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
@@ -528,22 +711,17 @@ export const Fleet: React.FC = () => {
   useEffect(() => {
     const enrichVehicles = () => {
       const enrichedVehicles = vehicles.map(vehicle => {
-        // Calcular custo total do veículo
         const vehicleCosts = costs.filter(cost => cost.vehicle_id === vehicle.id);
-        const totalCost = vehicleCosts.reduce((sum, cost) => sum + (cost.amount || 0), 0);
-
-        // Verificar se o veículo está em contrato ativo
-        const activeContract = contracts.find(contract => 
-          contract.vehicle_id === vehicle.id && 
-          contract.status === 'Ativo'
+        const totalCost = vehicleCosts.reduce((sum, cost) => sum + cost.amount, 0);
+        const activeContract = contracts.find(c => 
+          (c.vehicle_id === vehicle.id || 
+           c.contract_vehicles?.some(cv => cv.vehicle_id === vehicle.id)) && 
+          c.status === 'Ativo'
         );
 
-        // Determinar status real
         let actualStatus = vehicle.status;
         if (activeContract) {
-          actualStatus = 'Em Contrato';
-        } else if (vehicle.status === 'Em Uso' && !activeContract) {
-          actualStatus = 'Disponível'; // Corrigir status se não há contrato ativo
+          actualStatus = 'Em Uso';
         }
 
         return {
@@ -559,6 +737,17 @@ export const Fleet: React.FC = () => {
 
     enrichVehicles();
   }, [vehicles, costs, contracts]);
+
+  // Listen for vehicle mileage updates from maintenance check-outs
+  useEffect(() => {
+    const handleMileageUpdate = () => {
+      // Force refresh of vehicles data when mileage is updated
+      window.location.reload();
+    };
+
+    window.addEventListener('vehicle-mileage-updated', handleMileageUpdate);
+    return () => window.removeEventListener('vehicle-mileage-updated', handleMileageUpdate);
+  }, []);
 
   // Função de ordenação
   const handleSort = (field: SortField) => {
@@ -594,6 +783,12 @@ export const Fleet: React.FC = () => {
       } else if (sortField === 'status') {
         aValue = a.actualStatus;
         bValue = b.actualStatus;
+      } else if (sortField === 'initial_mileage') {
+        aValue = a.initial_mileage || 0;
+        bValue = b.initial_mileage || 0;
+      } else if (sortField === 'total_mileage') {
+        aValue = a.total_mileage || 0;
+        bValue = b.total_mileage || 0;
       }
 
       // Ordenação
@@ -644,10 +839,18 @@ export const Fleet: React.FC = () => {
   };
 
   const handleSave = async (data: any) => {
-    if (selectedVehicle) {
-      await updateVehicle(selectedVehicle.id, data);
-    } else {
-      await createVehicle(data);
+    try {
+      if (selectedVehicle) {
+        await updateVehicle(selectedVehicle.id, data);
+      } else {
+        await createVehicle(data);
+      }
+      // Forçar refresh da lista para garantir que os dados estejam atualizados
+      await new Promise(resolve => setTimeout(resolve, 100));
+      // Não precisa chamar fetchVehicles pois o hook já atualiza automaticamente
+    } catch (error) {
+      console.error('Erro ao salvar veículo:', error);
+      throw error;
     }
   };
 
@@ -846,6 +1049,14 @@ export const Fleet: React.FC = () => {
                     <p className="font-medium">{vehicle.category}</p>
                   </div>
                   <div>
+                    <span className="text-secondary-500">Km Inicial:</span>
+                    <p className="font-medium">{(vehicle.initial_mileage || 0).toLocaleString('pt-BR')} km</p>
+                  </div>
+                  <div>
+                    <span className="text-secondary-500">Km Total:</span>
+                    <p className="font-medium">{vehicle.total_mileage?.toLocaleString('pt-BR')} km</p>
+                  </div>
+                  <div>
                     <span className="text-secondary-500">Custo Total:</span>
                     <p className="font-medium text-primary-600">
                       R$ {vehicle.totalCost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
@@ -916,6 +1127,24 @@ export const Fleet: React.FC = () => {
                   <th className="text-left py-3 px-6 text-sm font-medium text-secondary-600">Categoria</th>
                   <th 
                     className="text-left py-3 px-6 text-sm font-medium text-secondary-600 cursor-pointer hover:bg-secondary-100"
+                    onClick={() => handleSort('initial_mileage')}
+                  >
+                    <div className="flex items-center space-x-1">
+                      <span>Km Inicial</span>
+                      {getSortIcon('initial_mileage')}
+                    </div>
+                  </th>
+                  <th 
+                    className="text-left py-3 px-6 text-sm font-medium text-secondary-600 cursor-pointer hover:bg-secondary-100"
+                    onClick={() => handleSort('total_mileage')}
+                  >
+                    <div className="flex items-center space-x-1">
+                      <span>Km Total</span>
+                      {getSortIcon('total_mileage')}
+                    </div>
+                  </th>
+                  <th 
+                    className="text-left py-3 px-6 text-sm font-medium text-secondary-600 cursor-pointer hover:bg-secondary-100"
                     onClick={() => handleSort('totalCost')}
                   >
                     <div className="flex items-center space-x-1">
@@ -961,6 +1190,18 @@ export const Fleet: React.FC = () => {
                     </td>
                     <td className="py-4 px-6 text-sm text-secondary-600">
                       {vehicle.category}
+                    </td>
+                    <td className="py-4 px-6 text-sm text-secondary-600">
+                      <div className="flex items-center">
+                        <Gauge className="h-4 w-4 text-secondary-400 mr-1" />
+                        <span className="font-medium">{(vehicle.initial_mileage || 0).toLocaleString('pt-BR')} km</span>
+                      </div>
+                    </td>
+                    <td className="py-4 px-6 text-sm text-secondary-600">
+                      <div className="flex items-center">
+                        <Gauge className="h-4 w-4 text-secondary-400 mr-1" />
+                        <span className="font-medium">{vehicle.total_mileage?.toLocaleString('pt-BR')} km</span>
+                      </div>
                     </td>
                     <td className="py-4 px-6 text-sm text-secondary-600">
                       <div className="flex items-center">

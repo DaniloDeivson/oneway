@@ -78,6 +78,7 @@ export const CostsList: React.FC<CostsListProps> = ({
             <th className="text-left py-3 px-6 text-sm font-medium text-secondary-600">Responsável</th>
             <th className="text-left py-3 px-6 text-sm font-medium text-secondary-600">Valor</th>
             <th className="text-left py-3 px-6 text-sm font-medium text-secondary-600">Status</th>
+            <th className="text-left py-3 px-6 text-sm font-medium text-secondary-600">Ação</th>
             <th className="text-left py-3 px-6 text-sm font-medium text-secondary-600">Ações</th>
           </tr>
         </thead>
@@ -89,7 +90,17 @@ export const CostsList: React.FC<CostsListProps> = ({
               </td>
               <td className="py-4 px-6">
                 <Badge variant="secondary" className="text-xs">
-                  {cost.origin_description || cost.origin}
+                  {(() => {
+                    if (cost.origin === 'Patio') {
+                      if (cost.description?.toLowerCase().includes('check-out')) return 'Controle de Pátio (Check-Out)';
+                      if (cost.description?.toLowerCase().includes('check-in')) return 'Controle de Pátio (Check-In)';
+                      return 'Controle de Pátio';
+                    }
+                    if (cost.origin === 'Manutencao') return 'Manutenção';
+                    if (cost.origin === 'Sistema') return 'Sistema';
+                    if (cost.origin === 'Compras') return 'Compras';
+                    return cost.origin;
+                  })()}
                 </Badge>
               </td>
               <td className="py-4 px-6">
@@ -133,6 +144,11 @@ export const CostsList: React.FC<CostsListProps> = ({
               </td>
               <td className="py-4 px-6">
                 {getStatusBadge(cost.status)}
+              </td>
+              <td className="py-4 px-6 text-sm text-secondary-600">
+                {cost.origin === 'Patio' && cost.description?.toLowerCase().includes('check-out') ? 'Check-Out' :
+                 cost.origin === 'Patio' && cost.description?.toLowerCase().includes('check-in') ? 'Check-In' :
+                 '-'}
               </td>
               <td className="py-4 px-6">
                 <div className="flex items-center space-x-2">

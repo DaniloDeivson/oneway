@@ -115,6 +115,8 @@ const CostModal: React.FC<{
                 </p>
                 <p className="text-info-700 text-xs mt-1">
                   Este custo foi criado automaticamente pelo sistema. Origem: {
+                    cost.origin === 'Patio' && cost.description?.toLowerCase().includes('check-out') ? 'Controle de Pátio (Check-Out)' :
+                    cost.origin === 'Patio' && cost.description?.toLowerCase().includes('check-in') ? 'Controle de Pátio (Check-In)' :
                     cost.origin === 'Patio' ? 'Controle de Pátio' :
                     cost.origin === 'Manutencao' ? 'Manutenção' :
                     cost.origin === 'Sistema' ? 'Sistema' :

@@ -1,7 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, RefObject } from 'react';
 import { Button } from '../UI/Button';
-import { Badge } from '../UI/Badge';
-import { Plus, Trash2, Camera, DollarSign, Save, RotateCcw } from 'lucide-react';
+import { Plus, Trash2, Camera, Save, RotateCcw, Upload, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { supabase } from '../../lib/supabase';
 
@@ -26,6 +25,29 @@ interface DamageCartModalProps {
 
 const DAMAGE_TYPES = ['Arranhão', 'Amassado', 'Quebrado', 'Desgaste', 'Outro'];
 const SEVERITIES = ['Baixa', 'Média', 'Alta'];
+const DEFAULT_CAR_LOCATIONS = [
+  'Porta dianteira esquerda',
+  'Porta dianteira direita',
+  'Porta traseira esquerda',
+  'Porta traseira direita',
+  'Para-choque dianteiro',
+  'Para-choque traseiro',
+  'Capô',
+  'Teto',
+  'Porta-malas',
+  'Retrovisor esquerdo',
+  'Retrovisor direito',
+  'Farol esquerdo',
+  'Farol direito',
+  'Lanterna esquerda',
+  'Lanterna direita',
+  'Vidro dianteiro',
+  'Vidro traseiro',
+  'Roda dianteira esquerda',
+  'Roda dianteira direita',
+  'Roda traseira esquerda',
+  'Roda traseira direita',
+];
 
 export const DamageCartModal: React.FC<DamageCartModalProps> = ({
   isOpen,
@@ -36,24 +58,181 @@ export const DamageCartModal: React.FC<DamageCartModalProps> = ({
   inspectionType,
 }) => {
   const [locationOptions, setLocationOptions] = useState<string[]>([]);
+  const [uploadingImages, setUploadingImages] = useState<Set<string>>(new Set());
+  const [storageStatus, setStorageStatus] = useState<'checking' | 'ready' | 'error'>('checking');
   const tableRef = useRef<HTMLTableElement>(null);
+
+  // Guardar refs para cada input file
+  const fileInputRefs = useRef<{ [damageId: string]: RefObject<HTMLInputElement> }>({});
+
+  // Garante que cada linha tem seu ref
+  const getFileInputRef = (damageId: string) => {
+    if (!fileInputRefs.current[damageId]) {
+      fileInputRefs.current[damageId] = React.createRef<HTMLInputElement>();
+    }
+    return fileInputRefs.current[damageId];
+  };
 
   useEffect(() => {
     if (!isOpen) return;
-    // Buscar localizações distintas do banco
-    const fetchLocations = async () => {
-      const { data, error } = await supabase
-        .from('inspection_items')
-        .select('location')
-        .neq('location', '')
-        .neq('location', null);
-      if (!error && data) {
-        const unique = Array.from(new Set(data.map((d: any) => d.location.trim())));
-        setLocationOptions(unique);
+    
+    // Testar conexão com storage
+    const testStorage = async () => {
+      try {
+        const { data, error } = await supabase.storage
+          .from('photos')
+          .list('', { limit: 1 });
+        
+        if (error) {
+          console.error('Erro ao testar storage:', error);
+          setStorageStatus('error');
+          toast.error('Erro na conexão com o storage. Execute o SQL de configuração.');
+        } else {
+          console.log('Storage funcionando:', data);
+          setStorageStatus('ready');
+        }
+      } catch (error) {
+        console.error('Erro ao testar storage:', error);
+        setStorageStatus('error');
+        toast.error('Erro na conexão com o storage. Execute o SQL de configuração.');
       }
     };
+    
+    // Buscar localizações de damage_locations
+    const fetchLocations = async () => {
+      const { data, error } = await supabase
+        .from('damage_locations')
+        .select('name');
+      if (!error && data && data.length > 0) {
+        setLocationOptions((data as { name: string }[]).map((d) => d.name));
+      } else {
+        setLocationOptions(DEFAULT_CAR_LOCATIONS);
+      }
+    };
+    
+    testStorage();
     fetchLocations();
   }, [isOpen]);
+
+  const uploadPhoto = async (file: File, damageId: string): Promise<string> => {
+    try {
+      // Validar o arquivo
+      if (!file) {
+        throw new Error('Nenhum arquivo selecionado');
+      }
+
+      const maxSize = 10 * 1024 * 1024; // 10MB
+      if (file.size > maxSize) {
+        throw new Error('Arquivo muito grande. Máximo 10MB');
+      }
+
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+      if (!allowedTypes.includes(file.type)) {
+        throw new Error('Tipo de arquivo não permitido. Use JPEG, PNG, WebP ou GIF');
+      }
+
+      const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+      const fileName = `damage-${damageId}-${Date.now()}.${fileExt}`;
+      const filePath = `inspection-photos/${fileName}`;
+
+      console.log('Iniciando upload:', { fileName, filePath, size: file.size, type: file.type });
+
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('photos')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (uploadError) {
+        console.error('Erro no upload:', uploadError);
+        throw new Error(`Erro no upload: ${uploadError.message}`);
+      }
+
+      console.log('Upload bem-sucedido:', uploadData);
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('photos')
+        .getPublicUrl(filePath);
+
+      console.log('URL pública gerada:', publicUrl);
+
+      if (!publicUrl) {
+        throw new Error('Erro ao gerar URL pública da imagem');
+      }
+
+      return publicUrl;
+    } catch (err) {
+      console.error('Erro completo no upload:', err);
+      throw new Error(err instanceof Error ? err.message : 'Falha no upload da foto');
+    }
+  };
+
+  const handleImageUpload = async (damageId: string, file: File) => {
+    console.log('Iniciando handleImageUpload:', { damageId, fileName: file.name, size: file.size });
+    
+    setUploadingImages(prev => new Set(prev).add(damageId));
+    
+    try {
+      toast.loading('Enviando foto...', { id: `upload-${damageId}` });
+      
+      const photoUrl = await uploadPhoto(file, damageId);
+      
+      console.log('Upload concluído, atualizando dano:', { damageId, photoUrl });
+      
+      updateDamage(damageId, 'photo_url', photoUrl);
+      
+      toast.success('Foto enviada com sucesso!', { id: `upload-${damageId}` });
+      
+    } catch (error) {
+      console.error('Erro no handleImageUpload:', error);
+      
+      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+      
+      toast.error(`Erro ao enviar foto: ${errorMessage}`, { id: `upload-${damageId}` });
+      
+      // Limpar qualquer URL inválida
+      updateDamage(damageId, 'photo_url', undefined);
+      
+    } finally {
+      setUploadingImages(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(damageId);
+        return newSet;
+      });
+    }
+  };
+
+  const removeImage = async (damageId: string) => {
+    const damage = damages.find(d => d.id === damageId);
+    
+    if (damage?.photo_url) {
+      try {
+        // Extrair o caminho do arquivo da URL
+        const url = new URL(damage.photo_url);
+        const pathSegments = url.pathname.split('/');
+        const fileName = pathSegments[pathSegments.length - 1];
+        const filePath = `inspection-photos/${fileName}`;
+        
+        console.log('Removendo foto do storage:', { filePath, originalUrl: damage.photo_url });
+        
+        // Tentar remover do storage (não falha se não conseguir)
+        const { error } = await supabase.storage
+          .from('photos')
+          .remove([filePath]);
+        
+        if (error) {
+          console.warn('Erro ao remover foto do storage:', error);
+        }
+        
+      } catch (error) {
+        console.warn('Erro ao processar remoção da foto:', error);
+      }
+    }
+    
+    updateDamage(damageId, 'photo_url', undefined);
+    toast.success('Foto removida');
+  };
 
   function createEmptyDamage(): DamageItem {
     return {
@@ -74,11 +253,11 @@ export const DamageCartModal: React.FC<DamageCartModalProps> = ({
     onUpdateCart([...damages, createEmptyDamage()]);
   };
 
-  const removeRow = (id: string) => {
+  const removeRow = (rowId: string) => {
     if (damages.length === 1) {
       onUpdateCart([createEmptyDamage()]);
     } else {
-      onUpdateCart(damages.filter(d => d.id !== id));
+      onUpdateCart(damages.filter(d => d.id !== rowId));
     }
   };
 
@@ -134,7 +313,7 @@ export const DamageCartModal: React.FC<DamageCartModalProps> = ({
               Registrar Danos - {inspectionType}
             </h2>
             <p className="text-sm text-secondary-600 mt-1">
-              Interface tipo Excel - Edite diretamente nas células
+              Interface tipo Excel - Edite diretamente nas células e faça upload de fotos
             </p>
           </div>
           <button onClick={onClose} className="text-secondary-400 hover:text-secondary-600 p-2">
@@ -143,7 +322,7 @@ export const DamageCartModal: React.FC<DamageCartModalProps> = ({
         </div>
 
         {/* Estatísticas */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
           <div className="bg-primary-50 p-4 rounded-lg">
             <div className="flex items-center justify-between">
               <div>
@@ -161,6 +340,18 @@ export const DamageCartModal: React.FC<DamageCartModalProps> = ({
                 <p className="text-2xl font-bold text-secondary-700">{damages.length}</p>
               </div>
               <Plus className="h-8 w-8 text-secondary-600" />
+            </div>
+          </div>
+
+          <div className="bg-green-50 p-4 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-green-600 font-medium">Fotos Enviadas</p>
+                <p className="text-2xl font-bold text-green-700">
+                  {damages.filter(d => d.photo_url).length}
+                </p>
+              </div>
+              <Upload className="h-8 w-8 text-green-600" />
             </div>
           </div>
         </div>
@@ -198,8 +389,8 @@ export const DamageCartModal: React.FC<DamageCartModalProps> = ({
                   <th className="text-left py-3 px-4 text-sm font-medium text-secondary-600 border-r border-secondary-200 min-w-[100px]">
                     Severidade
                   </th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-secondary-600 border-r border-secondary-200 min-w-[100px]">
-                    Requer Reparo
+                  <th className="text-left py-3 px-4 text-sm font-medium text-secondary-600 border-r border-secondary-200 min-w-[150px]">
+                    Foto do Dano
                   </th>
                   <th className="text-left py-3 px-4 text-sm font-medium text-secondary-600 min-w-[80px]">
                     Ações
@@ -213,21 +404,16 @@ export const DamageCartModal: React.FC<DamageCartModalProps> = ({
                       {index + 1}
                     </td>
                     <td className="py-2 px-2 border-r border-secondary-200">
-                      <input
-                        type="text"
+                      <select
                         value={damage.location}
                         onChange={(e) => updateDamage(damage.id, 'location', e.target.value)}
                         className="w-full border-0 bg-transparent focus:outline-none focus:ring-2 focus:ring-primary-500 rounded px-2 py-1"
-                        placeholder="Ex: Porta dianteira esquerda"
-                        list="location-suggestions"
-                      />
-                      {index === 0 && (
-                        <datalist id="location-suggestions">
-                          {locationOptions.map((loc) => (
-                            <option key={loc} value={loc} />
-                          ))}
-                        </datalist>
-                      )}
+                      >
+                        <option value="">Selecione...</option>
+                        {locationOptions.map((loc) => (
+                          <option key={loc} value={loc}>{loc}</option>
+                        ))}
+                      </select>
                     </td>
                     <td className="py-2 px-2 border-r border-secondary-200">
                       <textarea
@@ -260,13 +446,64 @@ export const DamageCartModal: React.FC<DamageCartModalProps> = ({
                         ))}
                       </select>
                     </td>
-                    <td className="py-2 px-4 border-r border-secondary-200 text-center">
-                      <input
-                        type="checkbox"
-                        checked={damage.requires_repair}
-                        onChange={(e) => updateDamage(damage.id, 'requires_repair', e.target.checked)}
-                        className="w-4 h-4 text-primary-600 focus:ring-primary-500 border-secondary-300 rounded"
-                      />
+                    <td className="py-2 px-2 border-r border-secondary-200">
+                      <div className="flex flex-col items-center space-y-2">
+                        {damage.photo_url ? (
+                          <div className="relative">
+                            <img 
+                              src={damage.photo_url} 
+                              alt="Foto do dano" 
+                              className="w-20 h-20 object-cover rounded border"
+                            />
+                            <button
+                              onClick={() => removeImage(damage.id)}
+                              className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-600"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="w-20 h-20 border-2 border-dashed border-secondary-300 rounded flex items-center justify-center">
+                            <Camera className="h-6 w-6 text-secondary-400" />
+                          </div>
+                        )}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          ref={getFileInputRef(damage.id)}
+                          style={{ display: 'none' }}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              handleImageUpload(damage.id, file);
+                            }
+                          }}
+                        />
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          disabled={uploadingImages.has(damage.id) || storageStatus !== 'ready'}
+                          className="text-xs"
+                          onClick={() => {
+                            const ref = getFileInputRef(damage.id).current;
+                            if (ref) ref.click();
+                          }}
+                        >
+                          {uploadingImages.has(damage.id) ? (
+                            'Enviando...'
+                          ) : storageStatus === 'error' ? (
+                            <>
+                              <X className="h-3 w-3 mr-1" />
+                              Erro
+                            </>
+                          ) : (
+                            <>
+                              <Upload className="h-3 w-3 mr-1" />
+                              Foto
+                            </>
+                          )}
+                        </Button>
+                      </div>
                     </td>
                     <td className="py-2 px-2 text-center">
                       <button
@@ -284,16 +521,46 @@ export const DamageCartModal: React.FC<DamageCartModalProps> = ({
           </div>
         </div>
 
-        {/* Instruções */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-          <h4 className="font-semibold text-blue-900 mb-2">💡 Como usar:</h4>
-          <ul className="text-sm text-blue-800 space-y-1">
-            <li>• Clique diretamente nas células para editar</li>
-            <li>• Use Tab para navegar entre células</li>
-            <li>• Preencha pelo menos Localização e Descrição para cada dano</li>
-            <li>• Clique em "Nova Linha" para adicionar mais danos</li>
-            <li>• O custo total será calculado automaticamente</li>
-          </ul>
+        {/* Instruções e Status */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <h4 className="font-semibold text-blue-900 mb-2">💡 Como usar:</h4>
+            <ul className="text-sm text-blue-800 space-y-1">
+              <li>• Clique diretamente nas células para editar</li>
+              <li>• Use Tab para navegar entre células</li>
+              <li>• Preencha pelo menos Localização e Descrição para cada dano</li>
+              <li>• Faça upload de fotos para cada dano clicando no botão "Foto"</li>
+              <li>• Clique em "Nova Linha" para adicionar mais danos</li>
+              <li>• O custo total será calculado automaticamente</li>
+            </ul>
+          </div>
+          
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="font-semibold text-green-900">📁 Upload de Fotos:</h4>
+                <div className={`px-2 py-1 rounded text-xs font-medium ${
+                  storageStatus === 'ready' ? 'bg-green-100 text-green-800' :
+                  storageStatus === 'error' ? 'bg-red-100 text-red-800' :
+                  'bg-yellow-100 text-yellow-800'
+                }`}>
+                  {storageStatus === 'ready' ? '✅ Pronto' :
+                   storageStatus === 'error' ? '❌ Erro' :
+                   '🔄 Testando...'}
+                </div>
+              </div>
+              <ul className="text-sm text-green-800 space-y-1">
+                <li>• Formatos aceitos: JPEG, PNG, WebP, GIF</li>
+                <li>• Tamanho máximo: 10MB por foto</li>
+                <li>• As fotos são armazenadas com segurança</li>
+                <li>• Você pode remover fotos clicando no "X"</li>
+                <li>• Status de upload aparece em tempo real</li>
+              </ul>
+              {storageStatus === 'error' && (
+                <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">
+                  ⚠️ Execute o SQL de configuração do storage antes de fazer upload de fotos.
+                </div>
+              )}
+            </div>
         </div>
 
         {/* Botões de ação */}

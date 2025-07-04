@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { supabase, DEFAULT_TENANT_ID } from '../lib/supabase';
-import { Database } from '../types/database';
 import toast from 'react-hot-toast';
 
 type MaintenanceCheckin = {
@@ -213,11 +212,18 @@ export const useMaintenanceCheckins = () => {
 
   const checkOut = async (id: string, notes?: string, signatureUrl?: string) => {
     try {
-      // Get the service note ID before checking out
+      // Get the service note ID and vehicle info before checking out
       const checkin = checkins.find(c => c.id === id);
       if (!checkin) throw new Error('Check-in não encontrado');
       
       const serviceNoteId = checkin.service_note_id;
+      
+      // Get service note details to check if it has mileage
+      const { data: serviceNote } = await supabase
+        .from('service_notes')
+        .select('mileage, vehicle_id, vehicles(plate)')
+        .eq('id', serviceNoteId)
+        .single();
       
       // Perform the check-out
       const result = await updateCheckin(id, {
@@ -235,6 +241,23 @@ export const useMaintenanceCheckins = () => {
           updated_at: new Date().toISOString() 
         })
         .eq('id', serviceNoteId);
+      
+      // Show notification about mileage update if applicable
+      if (serviceNote?.mileage && serviceNote.mileage > 0) {
+        toast.success(
+          `Check-out realizado com sucesso! Quilometragem do veículo ${(serviceNote.vehicles as any)?.plate} atualizada para ${serviceNote.mileage.toLocaleString('pt-BR')} km.`,
+          { duration: 5000 }
+        );
+        
+        // Trigger a refetch of vehicles data to update the fleet page
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('vehicle-mileage-updated', { 
+            detail: { vehicleId: serviceNote.vehicle_id } 
+          }));
+        }, 1000); // Aguarda 1 segundo para o trigger SQL executar
+      } else {
+        toast.success('Check-out realizado com sucesso!');
+      }
       
       return result;
     } catch (err) {

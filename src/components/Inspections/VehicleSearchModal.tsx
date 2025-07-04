@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Button } from '../UI/Button';
 import { Badge } from '../UI/Badge';
 import { Search, Car, Calendar, MapPin, X, Loader2 } from 'lucide-react';
+import { useContracts } from '../../hooks/useContracts';
 
 interface Vehicle {
   id: string;
@@ -30,6 +31,23 @@ export const VehicleSearchModal: React.FC<VehicleSearchModalProps> = ({
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredVehicles, setFilteredVehicles] = useState<Vehicle[]>([]);
+  const { contracts } = useContracts();
+
+  // Calculate real status based on contracts
+  const getActualStatus = (vehicle: Vehicle) => {
+    const activeContract = contracts.find(contract => 
+      contract.vehicle_id === vehicle.id && 
+      contract.status === 'Ativo'
+    );
+
+    if (activeContract) {
+      return 'Em Contrato';
+    } else if (vehicle.status === 'Em Uso' && !activeContract) {
+      return 'Disponível'; // Correct status if no active contract
+    }
+    
+    return vehicle.status;
+  };
 
   useEffect(() => {
     if (!searchTerm.trim()) {
@@ -49,6 +67,7 @@ export const VehicleSearchModal: React.FC<VehicleSearchModalProps> = ({
   const getStatusBadge = (status: string) => {
     const variants = {
       'Disponível': 'success',
+      'Em Contrato': 'info',
       'Em Uso': 'info',
       'Manutenção': 'warning',
       'Inativo': 'error'
@@ -103,42 +122,45 @@ export const VehicleSearchModal: React.FC<VehicleSearchModalProps> = ({
             {/* Vehicle List */}
             <div className="space-y-3 max-h-96 overflow-y-auto">
               {filteredVehicles.length > 0 ? (
-                filteredVehicles.map((vehicle) => (
-                  <div
-                    key={vehicle.id}
-                    onClick={() => handleSelectVehicle(vehicle)}
-                    className="p-4 border border-secondary-200 rounded-lg hover:bg-secondary-50 cursor-pointer transition-colors"
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center space-x-3">
-                        <div className="h-10 w-10 bg-primary-100 rounded-lg flex items-center justify-center">
-                          <Car className="h-5 w-5 text-primary-600" />
+                filteredVehicles.map((vehicle) => {
+                  const actualStatus = getActualStatus(vehicle);
+                  return (
+                    <div
+                      key={vehicle.id}
+                      onClick={() => handleSelectVehicle(vehicle)}
+                      className="p-4 border border-secondary-200 rounded-lg hover:bg-secondary-50 cursor-pointer transition-colors"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center space-x-3">
+                          <div className="h-10 w-10 bg-primary-100 rounded-lg flex items-center justify-center">
+                            <Car className="h-5 w-5 text-primary-600" />
+                          </div>
+                          <div>
+                            <h3 className="font-semibold text-secondary-900 text-lg">{vehicle.plate}</h3>
+                            <p className="text-sm text-secondary-600">{vehicle.model} ({vehicle.year})</p>
+                          </div>
                         </div>
-                        <div>
-                          <h3 className="font-semibold text-secondary-900 text-lg">{vehicle.plate}</h3>
-                          <p className="text-sm text-secondary-600">{vehicle.model} ({vehicle.year})</p>
-                        </div>
+                        {getStatusBadge(actualStatus)}
                       </div>
-                      {getStatusBadge(vehicle.status)}
-                    </div>
-                    
-                    <div className="flex items-center justify-between text-sm text-secondary-600">
-                      <div className="flex items-center space-x-4">
-                        <span className="flex items-center">
-                          <Calendar className="h-4 w-4 mr-1" />
-                          {vehicle.type}
-                        </span>
-                        {vehicle.location && (
+                      
+                      <div className="flex items-center justify-between text-sm text-secondary-600">
+                        <div className="flex items-center space-x-4">
                           <span className="flex items-center">
-                            <MapPin className="h-4 w-4 mr-1" />
-                            {vehicle.location}
+                            <Calendar className="h-4 w-4 mr-1" />
+                            {vehicle.type}
                           </span>
-                        )}
+                          {vehicle.location && (
+                            <span className="flex items-center">
+                              <MapPin className="h-4 w-4 mr-1" />
+                              {vehicle.location}
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-primary-600 font-medium">Selecionar →</span>
                       </div>
-                      <span className="text-primary-600 font-medium">Selecionar →</span>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               ) : searchTerm.length >= 3 ? (
                 <div className="text-center py-8">
                   <Car className="h-12 w-12 text-secondary-400 mx-auto mb-4" />

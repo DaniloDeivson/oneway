@@ -4,6 +4,7 @@ import { Database } from '../types/database';
 // Environment variables for Supabase connection
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+const supabaseServiceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY || '';
 
 if (!supabaseUrl || !supabaseAnonKey) {
   console.error('❌ Missing Supabase environment variables');
@@ -23,12 +24,27 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   }
 });
 
+// Create admin client for administrative operations (user deletion, etc.)
+export const supabaseAdmin = supabaseServiceRoleKey 
+  ? createClient<Database>(supabaseUrl, supabaseServiceRoleKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    })
+  : null;
+
 // Default tenant ID for demo purposes
 export const DEFAULT_TENANT_ID = '00000000-0000-0000-0000-000000000001';
 
 // Helper function to check if Supabase is properly configured
 export const isSupabaseConfigured = (): boolean => {
   return !!(supabaseUrl && supabaseAnonKey);
+};
+
+// Helper to check if admin operations are available
+export const isAdminConfigured = (): boolean => {
+  return !!(supabaseServiceRoleKey && supabaseAdmin);
 };
 
 // Helper to check current session

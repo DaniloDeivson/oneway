@@ -2,8 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Button } from '../UI/Button';
 import { Card, CardContent } from '../UI/Card';
 import { Plus, X, Car, DollarSign } from 'lucide-react';
+import { Database } from '../../types/database';
 
-interface Vehicle {
+type Vehicle = Database['public']['Tables']['vehicles']['Row'];
+
+interface AvailableVehicle {
   id: string;
   plate: string;
   model: string;
@@ -23,6 +26,9 @@ interface MultipleVehicleSelectorProps {
   onVehiclesChange: (vehicles: ContractVehicleData[]) => void;
   defaultDailyRate?: number;
   disabled?: boolean;
+  startDate?: string;
+  endDate?: string;
+  availableVehicles?: AvailableVehicle[];
 }
 
 export const MultipleVehicleSelector: React.FC<MultipleVehicleSelectorProps> = ({
@@ -30,7 +36,10 @@ export const MultipleVehicleSelector: React.FC<MultipleVehicleSelectorProps> = (
   selectedVehicles,
   onVehiclesChange,
   defaultDailyRate = 0,
-  disabled = false
+  disabled = false,
+  startDate,
+  endDate,
+  availableVehicles
 }) => {
   const [showAddVehicle, setShowAddVehicle] = useState(false);
   const [selectedVehicleId, setSelectedVehicleId] = useState('');
@@ -41,10 +50,22 @@ export const MultipleVehicleSelector: React.FC<MultipleVehicleSelectorProps> = (
     setVehicleRate(defaultDailyRate);
   }, [defaultDailyRate]);
 
-  // Get available vehicles (not already selected)
-  const availableVehicles = vehicles.filter(
-    vehicle => !selectedVehicles.some(sv => sv.vehicle_id === vehicle.id)
-  );
+  // Get available vehicles (not already selected and with proper status)
+  const filteredVehicles = React.useMemo(() => {
+    // Se temos uma lista específica de veículos disponíveis (por período), use ela
+    if (availableVehicles && availableVehicles.length > 0) {
+      return availableVehicles.filter(
+        vehicle => !selectedVehicles.some(sv => sv.vehicle_id === vehicle.id)
+      );
+    }
+    
+    // Caso contrário, filtre por status "Disponível"
+    return vehicles.filter(
+      vehicle => 
+        vehicle.status === 'Disponível' && 
+        !selectedVehicles.some(sv => sv.vehicle_id === vehicle.id)
+    );
+  }, [vehicles, availableVehicles, selectedVehicles]);
 
   const handleAddVehicle = () => {
     if (selectedVehicleId) {
@@ -88,7 +109,7 @@ export const MultipleVehicleSelector: React.FC<MultipleVehicleSelectorProps> = (
             variant="secondary"
             size="sm"
             onClick={() => setShowAddVehicle(true)}
-            disabled={availableVehicles.length === 0}
+            disabled={filteredVehicles.length === 0}
           >
             <Plus className="h-4 w-4 mr-2" />
             Adicionar Veículo
@@ -192,13 +213,26 @@ export const MultipleVehicleSelector: React.FC<MultipleVehicleSelectorProps> = (
                   onChange={(e) => setSelectedVehicleId(e.target.value)}
                   className="w-full border border-secondary-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
                 >
-                  <option value="">Selecione um veículo</option>
-                  {availableVehicles.map((vehicle) => (
+                  <option value="">
+                    {filteredVehicles.length === 0 ? 
+                      'Nenhum veículo disponível' : 
+                      'Selecione um veículo'
+                    }
+                  </option>
+                  {filteredVehicles.map((vehicle) => (
                     <option key={vehicle.id} value={vehicle.id}>
-                      {vehicle.plate} - {vehicle.model} ({vehicle.year})
+                      {vehicle.plate} - {vehicle.model} ({vehicle.year}) - {vehicle.status}
                     </option>
                   ))}
                 </select>
+                {filteredVehicles.length === 0 && (
+                  <p className="text-sm text-warning-600 mt-1">
+                    {!startDate || !endDate ? 
+                      '⚠️ Defina as datas do contrato primeiro para ver veículos disponíveis' :
+                      '⚠️ Nenhum veículo disponível no período selecionado'
+                    }
+                  </p>
+                )}
               </div>
 
               <div>

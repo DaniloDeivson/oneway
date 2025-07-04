@@ -124,7 +124,8 @@ const InvoiceModal: React.FC<{
 const NewInvoiceModal: React.FC<{
   isOpen: boolean;
   onClose: () => void;
-}> = ({ isOpen, onClose }) => {
+  onInvoiceCreated: () => void;
+}> = ({ isOpen, onClose, onInvoiceCreated }) => {
   const { customers } = useCustomers();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -142,13 +143,32 @@ const NewInvoiceModal: React.FC<{
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    
-    // Simulação de emissão de nota fiscal
-    setTimeout(() => {
+    try {
+      // Inserir nota fiscal no banco
+      const { error } = await supabase.from('invoices').insert([
+        {
+          customer: formData.customer,
+          customer_document: formData.customerDocument,
+          issue_date: formData.issueDate,
+          amount: formData.quantity * formData.unitPrice,
+          status: 'Emitida',
+          items: [{
+            description: formData.description,
+            quantity: formData.quantity,
+            unitPrice: formData.unitPrice
+          }],
+          notes: formData.notes
+        }
+      ]);
+      if (error) throw error;
       setLoading(false);
       onClose();
+      onInvoiceCreated();
       alert('Nota fiscal emitida com sucesso!');
-    }, 1500);
+    } catch (err) {
+      setLoading(false);
+      alert('Erro ao emitir nota fiscal!');
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -343,16 +363,16 @@ export const Notas: React.FC = () => {
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Buscar notas fiscais reais do Supabase
+  const fetchInvoices = async () => {
+    setLoading(true);
+    const { data, error } = await supabase.from('invoices').select('*').order('issue_date', { ascending: false });
+    if (!error && data) setInvoices(data as Invoice[]);
+    setLoading(false);
+  };
+
   useEffect(() => {
-    const fetchInvoices = async () => {
-      const { data, error } = await supabase
-        .from('invoices')
-        .select('*')
-        .order('issueDate', { ascending: false });
-      if (!error) setInvoices((data as Invoice[]) || []);
-    };
     fetchInvoices();
   }, []);
 
@@ -394,7 +414,7 @@ export const Notas: React.FC = () => {
           <h1 className="text-2xl lg:text-3xl font-bold text-secondary-900">Notas Fiscais</h1>
           <p className="text-secondary-600 mt-1 lg:mt-2">Emissão e gerenciamento de notas fiscais eletrônicas</p>
         </div>
-        <Button onClick={handleNewInvoice} size="sm" className="w-full sm:w-auto">
+        <Button onClick={() => setIsNewModalOpen(true)} size="sm" className="w-full sm:w-auto">
           <Plus className="h-4 w-4 mr-2" />
           Nova Nota Fiscal
         </Button>
@@ -641,6 +661,7 @@ export const Notas: React.FC = () => {
       <NewInvoiceModal
         isOpen={isNewModalOpen}
         onClose={() => setIsNewModalOpen(false)}
+        onInvoiceCreated={fetchInvoices}
       />
     </div>
   );

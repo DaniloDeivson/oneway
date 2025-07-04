@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase, DEFAULT_TENANT_ID } from '../lib/supabase';
+import { supabase, supabaseAdmin, DEFAULT_TENANT_ID, isAdminConfigured } from '../lib/supabase';
 import { Database } from '../types/database';
 import toast from 'react-hot-toast';
 
@@ -15,6 +15,8 @@ export const useEmployees = () => {
   const fetchEmployees = async () => {
     try {
       setLoading(true);
+      console.log('🔄 Fazendo fetch dos funcionários...');
+      
       const { data, error } = await supabase
         .from('employees')
         .select('*')
@@ -22,6 +24,10 @@ export const useEmployees = () => {
         .order('name', { ascending: true });
 
       if (error) throw error;
+      
+      console.log('📋 Funcionários carregados:', data?.length || 0);
+      console.log('📊 Lista atual:', data?.map(e => ({ name: e.name, email: e.contact_info?.email, active: e.active })));
+      
       setEmployees(data || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -68,105 +74,120 @@ export const useEmployees = () => {
     }
   };
 
-  const deleteEmployee = async (id: string) => {
-    try {
-      console.log('deleteEmployee called with id:', id);
-      
-      // Validate that we have an ID
-      if (!id || id === '') {
-        throw new Error('ID do funcionário é obrigatório para exclusão');
-      }
-      
-      // First, check if this is a critical admin user
-      console.log('Checking employee data...');
-      const { data: employeeData, error: fetchError } = await supabase
+  const deleteEmployee = async (id: string): Promise<void> => {
+    // 1. Validação inicial
+    if (!id?.trim()) {
+      throw new Error('ID do usuário é obrigatório');
+    }
+
+    // 2. Buscar dados do usuário
+    const { data: user, error: fetchError } = await supabase
+      .from('employees')
+      .select('id, name, role, contact_info, active')
+      .eq('id', id)
+      .eq('tenant_id', DEFAULT_TENANT_ID)
+      .single();
+
+    if (fetchError || !user) {
+      throw new Error('Usuário não encontrado');
+    }
+
+    // 3. Validações de segurança
+    if (user.role === 'Admin') {
+      const { data: adminCount } = await supabase
         .from('employees')
-        .select('role, contact_info, name')
-        .eq('id', id)
-        .eq('tenant_id', DEFAULT_TENANT_ID)
-        .single();
-      
-      if (fetchError) {
-        console.error('Error fetching employee data:', fetchError);
-        throw new Error('Funcionário não encontrado');
-      }
-      
-      console.log('Employee data:', employeeData);
-      
-      // Prevent deletion of the last admin user
-      if (employeeData?.role === 'Admin') {
-        console.log('Employee is admin, checking admin count...');
-        const { data: adminCount, error: countError } = await supabase
-          .from('employees')
-          .select('id', { count: 'exact' })
-          .eq('role', 'Admin')
-          .eq('active', true)
-          .eq('tenant_id', DEFAULT_TENANT_ID);
-        
-        if (countError) {
-          console.error('Error counting admins:', countError);
-        }
-        
-        console.log('Active admin count:', adminCount?.length || 0);
-        if ((adminCount?.length || 0) <= 1) {
-          throw new Error('Não é possível excluir o último administrador do sistema');
-        }
-      }
-      
-      // Check if this is the profitestrategista@gmail.com user
-      if (employeeData?.contact_info?.email === 'profitestrategista@gmail.com') {
-        throw new Error('Este usuário não pode ser excluído');
-      }
-      
-      // Try to delete the employee
-      console.log('Attempting to delete employee...');
-      const { error: deleteError } = await supabase
-        .from('employees')
-        .delete()
-        .eq('id', id)
+        .select('id', { count: 'exact' })
+        .eq('role', 'Admin')
+        .eq('active', true)
         .eq('tenant_id', DEFAULT_TENANT_ID);
 
-      if (deleteError) {
-        console.error('Delete error:', deleteError);
-        console.error('Delete error details:', {
-          message: deleteError.message,
-          details: deleteError.details,
-          hint: deleteError.hint,
-          code: deleteError.code
-        });
-        
-        // If deletion fails due to foreign key constraints, deactivate instead
-        if (deleteError.code === '23503') { // Foreign key violation
-          console.log('Foreign key violation, deactivating instead...');
-          await updateEmployee(id, { active: false });
-          toast.success('Funcionário desativado com sucesso (não foi possível excluir devido a referências no sistema)');
-          return;
-        }
-        throw deleteError;
+      if ((adminCount?.length || 0) <= 1) {
+        throw new Error('Não é possível excluir o último administrador');
       }
-      
-      console.log('Employee deleted successfully');
-      setEmployees(prev => prev.filter(e => e.id !== id));
-      toast.success('Funcionário excluído com sucesso!');
-    } catch (err) {
-      console.error('Full delete error details:', err);
-      
-      // More detailed error handling
-      if (err && typeof err === 'object' && 'message' in err) {
-        const errorMessage = (err as any).message;
-        if (errorMessage.includes('foreign key')) {
-          toast.error('Erro: Não é possível excluir funcionário que possui dependências no sistema.');
-        } else if (errorMessage.includes('permission')) {
-          toast.error('Erro: Sem permissão para excluir este funcionário.');
-        } else {
-          toast.error('Erro ao excluir funcionário: ' + errorMessage);
-        }
-      } else {
-        toast.error('Erro ao excluir funcionário: ' + (err instanceof Error ? err.message : 'Erro desconhecido'));
-      }
-      
-      throw new Error(err instanceof Error ? err.message : 'Failed to delete employee');
     }
+
+    if (user.contact_info?.email === 'profitestrategista@gmail.com') {
+      throw new Error('Este usuário não pode ser excluído');
+    }
+
+    // 4. Limpar referências em outras tabelas
+    const cleanupOperations = [
+      supabase.from('service_notes').update({ employee_id: null }).eq('employee_id', id),
+      supabase.from('inspections').update({ employee_id: null }).eq('employee_id', id),
+      supabase.from('contracts').update({ salesperson_id: null }).eq('salesperson_id', id),
+      supabase.from('fines').update({ employee_id: null, driver_id: null }).or(`employee_id.eq.${id},driver_id.eq.${id}`),
+      supabase.from('costs').update({ created_by_employee_id: null }).eq('created_by_employee_id', id)
+    ];
+
+    await Promise.allSettled(cleanupOperations);
+
+    // 5. Registrar remoção para auditoria
+    if (user.contact_info?.email) {
+      await supabase
+        .from('removed_users')
+        .upsert([{
+          id: user.id,
+          email: user.contact_info.email,
+          removed_at: new Date().toISOString()
+        }])
+        .then(() => {}, () => {}); // Ignora erros de conflito
+    }
+
+    // 6. Excluir da tabela employees
+    const { error: deleteError } = await supabase
+      .from('employees')
+      .delete()
+      .eq('id', id)
+      .eq('tenant_id', DEFAULT_TENANT_ID);
+
+    if (deleteError) {
+      throw new Error(`Erro ao excluir usuário: ${deleteError.message}`);
+    }
+
+    // Verificar se foi realmente excluído
+    const { data: checkUser } = await supabase
+      .from('employees')
+      .select('id')
+      .eq('id', id)
+      .single();
+
+    if (checkUser) {
+      throw new Error('Falha na exclusão: usuário ainda existe no banco de dados');
+    }
+
+    // 7. Excluir do sistema de autenticação (opcional)
+    if (isAdminConfigured() && supabaseAdmin) {
+      try {
+        await supabaseAdmin.auth.admin.deleteUser(id);
+      } catch (authError) {
+        console.warn('Usuário removido da aplicação, mas permanece no sistema de autenticação:', authError);
+      }
+    }
+
+    // 8. Atualizar estado local e forçar refetch
+    setEmployees(prev => {
+      const newList = prev.filter(e => e.id !== id);
+      console.log(`🗑️ Removendo usuário ${id} da lista local. Antes: ${prev.length}, Depois: ${newList.length}`);
+      return newList;
+    });
+    
+    // Forçar múltiplos refetch para garantir sincronização
+    setTimeout(() => {
+      console.log('🔄 Fazendo refetch após exclusão (1/3)...');
+      fetchEmployees();
+    }, 100);
+    
+    setTimeout(() => {
+      console.log('🔄 Fazendo refetch após exclusão (2/3)...');
+      fetchEmployees();
+    }, 500);
+    
+    setTimeout(() => {
+      console.log('🔄 Fazendo refetch após exclusão (3/3)...');
+      fetchEmployees();
+    }, 1000);
+    
+    toast.success('Usuário excluído com sucesso!');
   };
 
   const getEmployeesByRole = (role: string) => {
@@ -177,6 +198,14 @@ export const useEmployees = () => {
     fetchEmployees();
   }, []);
 
+  const forceRefresh = async () => {
+    console.log('🔄 FORÇANDO ATUALIZAÇÃO COMPLETA...');
+    setEmployees([]); // Limpar lista local
+    setLoading(true);
+    await fetchEmployees();
+    console.log('✅ Atualização forçada concluída!');
+  };
+
   return {
     employees,
     loading,
@@ -185,6 +214,7 @@ export const useEmployees = () => {
     updateEmployee,
     deleteEmployee,
     getEmployeesByRole,
-    refetch: fetchEmployees
+    refetch: fetchEmployees,
+    forceRefresh
   };
 };

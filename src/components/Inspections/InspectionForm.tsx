@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '../UI/Button';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Camera, Upload, X } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useContracts } from '../../hooks/useContracts';
+import { useInspections } from '../../hooks/useInspections';
 import toast from 'react-hot-toast';
 
 // Import sub-components
@@ -41,7 +42,8 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
   onRemoveDamage
 }) => {
   const { user, hasPermission } = useAuth();
-  const { contracts, refetch: refetchContracts } = useContracts();
+  const { contracts } = useContracts();
+  const { uploadPhoto } = useInspections();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     vehicle_id: inspection?.vehicle_id || selectedVehicle?.id || '',
@@ -53,8 +55,11 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
     mileage: inspection?.mileage || '',
     fuel_level: inspection?.fuel_level ? Math.round(inspection.fuel_level * 100) : '',
     contract_id: inspection?.contract_id || '',
-    location: inspection?.location || ''
+    location: inspection?.location || '',
+    dashboard_warning_light: inspection?.dashboard_warning_light || false,
+    dashboard_photo_url: inspection?.dashboard_photo_url || ''
   });
+  const [uploadingDashboardPhoto, setUploadingDashboardPhoto] = useState(false);
   const [activeContract, setActiveContract] = useState<any>(null);
   const [availableContracts, setAvailableContracts] = useState<any[]>([]);
 
@@ -149,7 +154,7 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
       const validFields = [
         'vehicle_id', 'inspection_type', 'employee_id', 'inspected_by', 
         'notes', 'signature_url', 'mileage', 'fuel_level', 'contract_id', 
-        'location', 'inspected_at'
+        'location', 'dashboard_warning_light', 'dashboard_photo_url', 'inspected_at'
       ];
       
       const sanitizedData: any = {};
@@ -186,6 +191,29 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
     }));
   };
 
+  const handleCheckboxChange = (name: string, checked: boolean) => {
+    setFormData(prev => ({ ...prev, [name]: checked }));
+  };
+
+  const handleDashboardPhotoUpload = async (file: File) => {
+    setUploadingDashboardPhoto(true);
+    try {
+      const photoUrl = await uploadPhoto(file);
+      setFormData(prev => ({ ...prev, dashboard_photo_url: photoUrl }));
+      toast.success('Foto do painel enviada com sucesso!');
+    } catch (error) {
+      console.error('Error uploading dashboard photo:', error);
+      toast.error('Erro ao enviar foto do painel');
+    } finally {
+      setUploadingDashboardPhoto(false);
+    }
+  };
+
+  const removeDashboardPhoto = () => {
+    setFormData(prev => ({ ...prev, dashboard_photo_url: '' }));
+    toast.success('Foto do painel removida');
+  };
+
   return (
     <form onSubmit={handleSubmit} className="space-y-4 lg:space-y-6">
       {/* Vehicle Info */}
@@ -219,8 +247,80 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
       <VehicleMetrics 
         mileage={formData.mileage}
         fuelLevel={formData.fuel_level}
+        dashboardWarningLight={formData.dashboard_warning_light}
         onChange={handleChange}
+        onCheckboxChange={handleCheckboxChange}
       />
+
+      {/* Dashboard Photo Upload - Show when dashboard warning light is checked */}
+      {formData.dashboard_warning_light && (
+        <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+          <h4 className="font-semibold text-orange-900 mb-3 flex items-center">
+            <Camera className="h-5 w-5 mr-2" />
+            Foto do Painel (Luz de Aviso)
+          </h4>
+          <p className="text-sm text-orange-800 mb-4">
+            Como há luz de aviso no painel, é recomendado tirar uma foto para documentar o problema.
+          </p>
+          
+          <div className="flex items-center space-x-4">
+            {formData.dashboard_photo_url ? (
+              <div className="relative">
+                <img 
+                  src={formData.dashboard_photo_url} 
+                  alt="Foto do painel" 
+                  className="w-32 h-24 object-cover rounded border"
+                />
+                <button
+                  type="button"
+                  onClick={removeDashboardPhoto}
+                  className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm hover:bg-red-600"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            ) : (
+              <div className="w-32 h-24 border-2 border-dashed border-orange-300 rounded flex items-center justify-center">
+                <Camera className="h-8 w-8 text-orange-400" />
+              </div>
+            )}
+
+            <div className="flex-1">
+              <label className="cursor-pointer">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      handleDashboardPhotoUpload(file);
+                    }
+                  }}
+                  className="hidden"
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={uploadingDashboardPhoto}
+                  className="flex items-center"
+                >
+                  {uploadingDashboardPhoto ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Enviando...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="h-4 w-4 mr-2" />
+                      {formData.dashboard_photo_url ? 'Alterar Foto' : 'Enviar Foto'}
+                    </>
+                  )}
+                </Button>
+              </label>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Notes */}
       <div>

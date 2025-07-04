@@ -12,7 +12,7 @@ import { useMaintenanceCheckins } from '../hooks/useMaintenanceCheckins';
 import { PartsCartModal } from '../components/Maintenance/PartsCartModal';
 import { CheckInOutModal } from '../components/Maintenance/CheckInOutModal';
 import { CheckInStatusCard } from '../components/Maintenance/CheckInStatusCard';
-import { Plus, Search, Filter, Wrench, Clock, CheckCircle, Loader2, Edit, Eye, Package, AlertTriangle, ShoppingCart, Trash2, Minus, LogIn, LogOut, User, Calendar } from 'lucide-react';
+import { Plus, Search, Filter, Wrench, Clock, CheckCircle, Loader2, Edit, Eye, Package, AlertTriangle, Trash2, LogIn, LogOut, User } from 'lucide-react';
 import ServiceNoteForm from '../components/Maintenance/ServiceNoteForm';
 import toast from 'react-hot-toast';
 
@@ -138,15 +138,13 @@ const ServiceNoteModal: React.FC<{
   parts: any[];
   onSave: (data: any, partsCart?: PartCartItem[]) => Promise<void>;
 }> = ({ isOpen, onClose, serviceNote, vehicles, maintenanceTypes, mechanics, parts, onSave }) => {
-  const [loading, setLoading] = useState(false);
   const [isPartsCartOpen, setIsPartsCartOpen] = useState(false);
   const [localPartsCart, setLocalPartsCart] = useState<PartCartItem[]>([]);
-  const { serviceOrderParts, addPartsToServiceOrder, removePartFromServiceOrder } = useServiceOrderParts(serviceNote?.id);
+  const { serviceOrderParts, addPartsToServiceOrder } = useServiceOrderParts(serviceNote?.id);
 
   if (!isOpen) return null;
 
-  const handleSave = async (formData: any, partsCart?: PartCartItem[]) => {
-    setLoading(true);
+  const handleSave = async (formData: any) => {
     try {
       // Para nova ordem de serviço, passa o carrinho local
       await onSave(formData, !serviceNote ? localPartsCart : undefined);
@@ -155,8 +153,6 @@ const ServiceNoteModal: React.FC<{
     } catch (error) {
       console.error('Error saving service note:', error);
       toast.error('Erro ao salvar ordem de serviço: ' + (error instanceof Error ? error.message : 'Erro desconhecido'));
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -231,7 +227,6 @@ export const Maintenance: React.FC = () => {
   const { parts } = useParts();
   const { addPartsToServiceOrder } = useServiceOrderParts();
   const { 
-    checkins, 
     statistics: checkinStats, 
     createCheckin, 
     checkOut, 
@@ -245,6 +240,10 @@ export const Maintenance: React.FC = () => {
   const [isCheckInModalOpen, setIsCheckInModalOpen] = useState(false);
   const [selectedServiceNote, setSelectedServiceNote] = useState<any>(undefined);
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  
+  // Hook para buscar peças da ordem de serviço selecionada
+  const { serviceOrderParts } = useServiceOrderParts(isViewModalOpen && selectedServiceNote ? selectedServiceNote.id : undefined);
 
   const filteredNotes = serviceNotes.filter(note =>
     note.vehicles?.plate?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -364,6 +363,11 @@ export const Maintenance: React.FC = () => {
   const getMechanicName = (employeeId: string) => {
     const employee = employees.find(e => e.id === employeeId);
     return employee ? employee.name : 'Não atribuído';
+  };
+
+  const handleView = (serviceNote: any) => {
+    setSelectedServiceNote(serviceNote);
+    setIsViewModalOpen(true);
   };
 
   if (loading) {
@@ -527,7 +531,10 @@ export const Maintenance: React.FC = () => {
                     <span>{mechanicName}</span>
                   </div>
                   <div className="flex justify-end mt-3 space-x-2">
-                    <button className="p-2 text-secondary-400 hover:text-secondary-600">
+                    <button 
+                      onClick={() => handleView(note)}
+                      className="p-2 text-secondary-400 hover:text-secondary-600"
+                    >
                       <Eye className="h-4 w-4" />
                     </button>
                     <button 
@@ -621,7 +628,10 @@ export const Maintenance: React.FC = () => {
                       </td>
                       <td className="py-4 px-6">
                         <div className="flex items-center space-x-2">
-                          <button className="p-1 text-secondary-400 hover:text-secondary-600">
+                          <button 
+                            onClick={() => handleView(note)}
+                            className="p-1 text-secondary-400 hover:text-secondary-600"
+                          >
                             <Eye className="h-4 w-4" />
                           </button>
                           <button 
@@ -708,6 +718,205 @@ export const Maintenance: React.FC = () => {
         parts={parts}
         onSave={handleSave}
       />
+
+      {/* View Service Note Modal */}
+      {isViewModalOpen && selectedServiceNote && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-4 lg:p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-semibold text-secondary-900">
+                Detalhes da Ordem de Serviço
+              </h2>
+              <button 
+                onClick={() => setIsViewModalOpen(false)}
+                className="text-secondary-400 hover:text-secondary-600 p-2"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Informações Gerais */}
+              <div className="space-y-4">
+                <div className="bg-secondary-50 p-4 rounded-lg">
+                  <h4 className="font-semibold text-secondary-900 mb-3">Informações Gerais</h4>
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-secondary-600">Veículo:</span>
+                      <span className="font-medium">
+                        {selectedServiceNote.vehicles?.plate} - {selectedServiceNote.vehicles?.model}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-secondary-600">Tipo:</span>
+                      <span className="font-medium">{selectedServiceNote.maintenance_type}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-secondary-600">Status:</span>
+                      <span>{getStatusBadge(selectedServiceNote.status)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-secondary-600">Prioridade:</span>
+                      <span>{getPriorityBadge(selectedServiceNote.priority)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-secondary-50 p-4 rounded-lg">
+                  <h4 className="font-semibold text-secondary-900 mb-3">Datas</h4>
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-secondary-600">Início:</span>
+                      <span className="font-medium">
+                        {new Date(selectedServiceNote.start_date).toLocaleDateString('pt-BR')}
+                      </span>
+                    </div>
+                    {selectedServiceNote.end_date && (
+                      <div className="flex justify-between">
+                        <span className="text-secondary-600">Conclusão:</span>
+                        <span className="font-medium">
+                          {new Date(selectedServiceNote.end_date).toLocaleDateString('pt-BR')}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {selectedServiceNote.mileage && (
+                  <div className="bg-secondary-50 p-4 rounded-lg">
+                    <h4 className="font-semibold text-secondary-900 mb-3">Quilometragem</h4>
+                    <div className="flex justify-between items-center">
+                      <span className="text-secondary-600">Registrada:</span>
+                      <span className="font-medium">{selectedServiceNote.mileage.toLocaleString('pt-BR')} km</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Descrição e Observações */}
+              <div className="space-y-4">
+                <div className="bg-secondary-50 p-4 rounded-lg">
+                  <h4 className="font-semibold text-secondary-900 mb-3">Descrição</h4>
+                  <p className="text-secondary-700 whitespace-pre-wrap">
+                    {selectedServiceNote.description}
+                  </p>
+                </div>
+
+                {selectedServiceNote.observations && (
+                  <div className="bg-secondary-50 p-4 rounded-lg">
+                    <h4 className="font-semibold text-secondary-900 mb-3">Observações</h4>
+                    <p className="text-secondary-700 whitespace-pre-wrap">
+                      {selectedServiceNote.observations}
+                    </p>
+                  </div>
+                )}
+
+                <div className="bg-secondary-50 p-4 rounded-lg">
+                  <h4 className="font-semibold text-secondary-900 mb-3">Responsável</h4>
+                  <div className="flex items-center">
+                    <div className="h-10 w-10 bg-primary-100 rounded-full flex items-center justify-center">
+                      <User className="h-5 w-5 text-primary-600" />
+                    </div>
+                    <div className="ml-3">
+                      <p className="font-medium text-secondary-900">
+                        {selectedServiceNote.mechanic}
+                      </p>
+                      <p className="text-sm text-secondary-600">Mecânico Responsável</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Peças Utilizadas */}
+            {serviceOrderParts && serviceOrderParts.length > 0 && (
+              <div className="border-t pt-6 mt-6">
+                <h3 className="text-lg font-semibold text-secondary-900 mb-4 flex items-center">
+                  <Package className="h-5 w-5 mr-2" />
+                  Peças Utilizadas ({serviceOrderParts.length})
+                </h3>
+                
+                <div className="overflow-x-auto">
+                  <table className="w-full border border-secondary-200 rounded-lg">
+                    <thead className="bg-secondary-50">
+                      <tr>
+                        <th className="text-left py-3 px-4 text-sm font-medium text-secondary-600">SKU</th>
+                        <th className="text-left py-3 px-4 text-sm font-medium text-secondary-600">Peça</th>
+                        <th className="text-left py-3 px-4 text-sm font-medium text-secondary-600">Quantidade</th>
+                        <th className="text-left py-3 px-4 text-sm font-medium text-secondary-600">Valor Unit.</th>
+                        <th className="text-left py-3 px-4 text-sm font-medium text-secondary-600">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-secondary-200">
+                      {serviceOrderParts.map((part) => (
+                        <tr key={part.id} className="hover:bg-secondary-50">
+                          <td className="py-3 px-4 text-sm font-medium text-secondary-900">
+                            {part.parts?.sku || 'N/A'}
+                          </td>
+                          <td className="py-3 px-4 text-sm text-secondary-700">
+                            {part.parts?.name || 'Peça não encontrada'}
+                          </td>
+                          <td className="py-3 px-4 text-sm text-secondary-700">
+                            {part.quantity_used}
+                          </td>
+                          <td className="py-3 px-4 text-sm text-secondary-700">
+                            R$ {part.unit_cost_at_time.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-3 px-4 text-sm font-medium text-secondary-900">
+                            R$ {part.total_cost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot className="bg-secondary-50">
+                      <tr>
+                        <td colSpan={4} className="py-3 px-4 text-sm font-medium text-secondary-900 text-right">
+                          Total Geral:
+                        </td>
+                        <td className="py-3 px-4 text-sm font-bold text-primary-600">
+                          R$ {serviceOrderParts.reduce((sum, part) => sum + part.total_cost, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Quando não há peças */}
+            {serviceOrderParts && serviceOrderParts.length === 0 && (
+              <div className="border-t pt-6 mt-6">
+                <h3 className="text-lg font-semibold text-secondary-900 mb-4 flex items-center">
+                  <Package className="h-5 w-5 mr-2" />
+                  Peças Utilizadas
+                </h3>
+                <div className="text-center py-4 text-secondary-500">
+                  <Package className="h-8 w-8 mx-auto mb-2" />
+                  <p>Nenhuma peça foi utilizada nesta ordem de serviço</p>
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end mt-6 space-x-4">
+              <Button 
+                variant="secondary" 
+                onClick={() => setIsViewModalOpen(false)}
+              >
+                Fechar
+              </Button>
+              <Button 
+                onClick={() => {
+                  setIsViewModalOpen(false);
+                  handleEdit(selectedServiceNote);
+                }}
+              >
+                <Edit className="h-4 w-4 mr-2" />
+                Editar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

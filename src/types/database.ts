@@ -73,6 +73,9 @@ export interface Database {
           location: string | null;
           acquisition_date: string | null;
           acquisition_value: number | null;
+          mileage: number | null;
+          initial_mileage: number | null;
+          tank_capacity: number | null;
           status: 'Disponível' | 'Em Uso' | 'Manutenção' | 'Inativo';
           maintenance_status: 'Available' | 'In_Maintenance' | 'Reserved' | 'Rented';
           created_at: string;
@@ -94,6 +97,9 @@ export interface Database {
           location?: string | null;
           acquisition_date?: string | null;
           acquisition_value?: number | null;
+          mileage?: number | null;
+          initial_mileage?: number | null;
+          tank_capacity?: number | null;
           status?: 'Disponível' | 'Em Uso' | 'Manutenção' | 'Inativo';
           maintenance_status?: 'Available' | 'In_Maintenance' | 'Reserved' | 'Rented';
           created_at?: string;
@@ -115,6 +121,9 @@ export interface Database {
           location?: string | null;
           acquisition_date?: string | null;
           acquisition_value?: number | null;
+          mileage?: number | null;
+          initial_mileage?: number | null;
+          tank_capacity?: number | null;
           status?: 'Disponível' | 'Em Uso' | 'Manutenção' | 'Inativo';
           maintenance_status?: 'Available' | 'In_Maintenance' | 'Reserved' | 'Rented';
           created_at?: string;

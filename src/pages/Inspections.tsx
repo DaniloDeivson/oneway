@@ -13,6 +13,15 @@ import { Plus, Search, Filter, ClipboardCheck, AlertTriangle, FileText, Loader2,
 import toast from 'react-hot-toast';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
+import { Database } from '../types/database';
+
+type Vehicle = Database['public']['Tables']['vehicles']['Row'];
+type BaseInspection = Database['public']['Tables']['inspections']['Row'];
+
+interface Inspection extends BaseInspection {
+  vehicles?: Vehicle;
+  inspection_items?: DamageItem[];
+}
 
 interface DamageItem {
   id: string;
@@ -24,15 +33,31 @@ interface DamageItem {
   requires_repair: boolean;
 }
 
-const InspectionModal: React.FC<{
+interface Employee {
+  id: string;
+  name: string;
+  role: string;
+}
+
+interface InspectionModalProps {
   isOpen: boolean;
   onClose: () => void;
-  inspection?: any;
-  selectedVehicle?: any;
-  employees: any[];
-  onSave: (data: any, damages?: Omit<DamageItem, 'id'>[]) => Promise<void>;
+  inspection?: Inspection;
+  selectedVehicle?: Vehicle;
+  employees: Employee[];
+  onSave: (data: Inspection, damages?: Omit<DamageItem, 'id'>[]) => Promise<void>;
   onUploadSignature: (blob: Blob) => Promise<string>;
-}> = ({ isOpen, onClose, inspection, selectedVehicle, employees, onSave, onUploadSignature }) => {
+}
+
+const InspectionModal: React.FC<InspectionModalProps> = ({
+  isOpen,
+  onClose,
+  inspection,
+  selectedVehicle,
+  employees,
+  onSave,
+  onUploadSignature
+}) => {
   // Move hooks to the top, before any conditional returns
   const { uploadPhoto, addInspectionItem } = useInspections();
   const [loading, setLoading] = useState(false);
@@ -109,8 +134,6 @@ const InspectionModal: React.FC<{
   };
 
   const handleSaveDamageCart = async (damages: Omit<DamageItem, 'id'>[]) => {
-    console.log('handleSaveDamageCart called with:', damages);
-    
     if (inspection) {
       // Para inspeção existente, salvar danos diretamente
       try {
@@ -123,22 +146,21 @@ const InspectionModal: React.FC<{
         toast.error('Erro ao adicionar danos à inspeção');
       }
     } else {
-      // Para nova inspeção, adicionar ao carrinho local
-      const damagesWithId = damages.map(damage => ({
-        ...damage,
-        id: Date.now().toString() + Math.random().toString()
-      }));
-      
-      console.log('Adding to cart:', damagesWithId);
-      
-      // Atualizar o carrinho com novos danos
+      // Para nova inspeção, adicionar ao carrinho local apenas se não existirem
       setDamageCart(prev => {
-        const updated = [...prev, ...damagesWithId];
-        console.log('Updated damage cart:', updated);
-        return updated;
+        // Evita duplicidade: só adiciona se não existir igual (por localização e descrição)
+        const newDamages = damages.filter(newD =>
+          !prev.some(prevD => prevD.location === newD.location && prevD.description === newD.description)
+        );
+        const damagesWithId = newDamages.map(damage => ({
+          ...damage,
+          id: Date.now().toString() + Math.random().toString()
+        }));
+        if (damagesWithId.length > 0) {
+          toast.success(`${damagesWithId.length} danos adicionados ao carrinho!`);
+        }
+        return [...prev, ...damagesWithId];
       });
-      
-      toast.success(`${damagesWithId.length} danos adicionados ao carrinho!`);
     }
   };
 
@@ -193,13 +215,13 @@ export const Inspections: React.FC = () => {
   const [typeFilter, setTypeFilter] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isVehicleSearchOpen, setIsVehicleSearchOpen] = useState(false);
-  const [selectedInspection, setSelectedInspection] = useState<any>(undefined);
-  const [selectedVehicle, setSelectedVehicle] = useState<any>(undefined);
+  const [selectedInspection, setSelectedInspection] = useState<Inspection | null>(null);
+  const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [processingNotifications, setProcessingNotifications] = useState(false);
   const [damageItems, setDamageItems] = useState<DamageItem[]>([]);
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
-  const [selectedViewInspection, setSelectedViewInspection] = useState<any>(null);
+  const [selectedViewInspection, setSelectedViewInspection] = useState<Inspection | null>(null);
 
   const canManageInspections = isAdmin || isManager || hasPermission('inspections');
 
@@ -237,7 +259,7 @@ export const Inspections: React.FC = () => {
   };
 
   const handleNewInspection = () => {
-    setSelectedInspection(undefined);
+    setSelectedInspection(null);
     setSelectedVehicle(null);
     setIsVehicleSearchOpen(true);
   };
@@ -386,9 +408,9 @@ export const Inspections: React.FC = () => {
   };
 
   // Get inspector name from employee ID
-  const getInspectorName = (employeeId: string, inspection?: any) => {
-    const employee = employees.find(e => e.id === employeeId);
-    return employee ? employee.name : inspection?.inspected_by || 'Não atribuído';
+  const getInspectorName = (employeeId: string | null, inspection?: Inspection) => {
+    if (!employeeId && !inspection?.inspected_by) return 'N/A';
+    return inspection?.inspected_by || 'N/A';
   };
 
   // Get contract info if available
@@ -851,16 +873,24 @@ export const Inspections: React.FC = () => {
                 <div className="bg-secondary-50 p-4 rounded-lg">
                   <h4 className="font-semibold text-secondary-900 mb-3">Métricas</h4>
                   <div className="space-y-2">
-                    {selectedViewInspection.mileage && (
+                    {selectedViewInspection?.mileage && (
                       <div className="flex justify-between">
                         <span className="text-secondary-600">Quilometragem:</span>
                         <span className="font-medium">{selectedViewInspection.mileage} km</span>
                       </div>
                     )}
-                    {selectedViewInspection.fuel_level && (
+                    {selectedViewInspection?.fuel_level && (
                       <div className="flex justify-between">
                         <span className="text-secondary-600">Combustível:</span>
                         <span className="font-medium">{Math.round(selectedViewInspection.fuel_level * 100)}%</span>
+                      </div>
+                    )}
+                    {selectedViewInspection?.fuel_level && selectedViewInspection.vehicles?.type && (
+                      <div className="flex justify-between">
+                        <span className="text-secondary-600">Litros para completar:</span>
+                        <span className="font-medium">
+                          {Math.round((1 - selectedViewInspection.fuel_level) * (selectedViewInspection.vehicles.type === 'Furgão' ? 80 : 60))} L
+                        </span>
                       </div>
                     )}
                   </div>
@@ -874,9 +904,9 @@ export const Inspections: React.FC = () => {
                   <h4 className="font-semibold text-secondary-900 mb-3">
                     Danos Identificados ({selectedViewInspection.inspection_items?.length || 0})
                   </h4>
-                  {selectedViewInspection.inspection_items?.length > 0 ? (
+                  {selectedViewInspection.inspection_items && selectedViewInspection.inspection_items.length > 0 ? (
                     <div className="space-y-3">
-                      {selectedViewInspection.inspection_items.map((item: any, index: number) => (
+                      {selectedViewInspection.inspection_items.map((item: DamageItem, index: number) => (
                         <div key={index} className="bg-white p-3 rounded border-l-4 border-warning-500">
                           <div className="flex justify-between items-start mb-2">
                             <span className="font-medium text-secondary-900">{item.location}</span>
@@ -885,7 +915,7 @@ export const Inspections: React.FC = () => {
                             </Badge>
                           </div>
                           <p className="text-sm text-secondary-600 mb-2">{item.description}</p>
-                          <div className="flex justify-between items-center">
+                          <div className="flex items-center gap-4 mb-2">
                             <span className="text-xs text-secondary-500">
                               Severidade: {item.severity}
                             </span>
@@ -895,6 +925,16 @@ export const Inspections: React.FC = () => {
                               </Badge>
                             )}
                           </div>
+                          {item.photo_url && (
+                            <div className="mt-2">
+                              <img
+                                src={item.photo_url}
+                                alt="Foto do dano"
+                                className="w-32 h-32 object-cover rounded border"
+                                style={{ maxWidth: '100%', maxHeight: '150px' }}
+                              />
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -906,11 +946,11 @@ export const Inspections: React.FC = () => {
                 </div>
 
                 {/* Observações */}
-                {selectedViewInspection.observations && (
+                {selectedViewInspection?.notes && (
                   <div className="bg-secondary-50 p-4 rounded-lg">
                     <h4 className="font-semibold text-secondary-900 mb-3">Observações</h4>
                     <p className="text-secondary-700 whitespace-pre-wrap">
-                      {selectedViewInspection.observations}
+                      {selectedViewInspection.notes}
                     </p>
                   </div>
                 )}

@@ -8,6 +8,7 @@ export interface AppUser {
   name: string;
   role: string;
   permissions: Record<string, boolean>;
+  tenant_id: string;
 }
 
 const SESSION_KEY = 'oneWayUser';
@@ -59,6 +60,7 @@ export const useAuth = () => {
       name: data.name || supabaseUser.user_metadata?.name || supabaseUser.email,
       role: data.role,
       permissions: data.permissions || {},
+      tenant_id: data.tenant_id,
     };
   };
 
@@ -153,6 +155,7 @@ export const useAuth = () => {
 
   // Helpers
   const isAdmin = user?.role === 'Admin';
+  const isManager = user?.role === 'Manager';
   const hasPermission = (perm: string) => !!user?.permissions?.[perm] || isAdmin;
 
   return {
@@ -163,6 +166,7 @@ export const useAuth = () => {
     login,
     logout,
     isAdmin,
+    isManager,
     hasPermission,
   };
 };

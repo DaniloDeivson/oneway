@@ -74,6 +74,20 @@ export default function RegisterForm({ onSuccess, onCancel }: RegisterFormProps)
     setError(null);
 
     try {
+      // Verifica se o email está em removed_users
+      const { data: removedUser, error: removedUserError } = await supabase
+        .from('removed_users')
+        .select('id')
+        .eq('email', data.email)
+        .single();
+      if (removedUser) {
+        throw new Error('Este usuário foi removido do sistema e não pode ser cadastrado novamente.');
+      }
+      if (removedUserError && removedUserError.code !== 'PGRST116') {
+        // PGRST116 = not found, então só lança erro se for outro
+        throw removedUserError;
+      }
+
       // First, create the auth user
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: data.email,

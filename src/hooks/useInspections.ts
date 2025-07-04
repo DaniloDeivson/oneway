@@ -17,6 +17,8 @@ type InspectionInsert = Database['public']['Tables']['inspections']['Insert'];
 type InspectionUpdate = Database['public']['Tables']['inspections']['Update'];
 type InspectionItemInsert = Database['public']['Tables']['inspection_items']['Insert'];
 
+type Vehicle = Database['public']['Tables']['vehicles']['Row'];
+
 interface InspectionStatistics {
   total_inspections: number;
   checkin_count: number;
@@ -33,6 +35,36 @@ export const useInspections = () => {
   const [statistics, setStatistics] = useState<InspectionStatistics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Função auxiliar para atualizar a quilometragem do veículo
+  const updateVehicleMileage = async (vehicleId: string, newMileage: number) => {
+    try {
+      // Primeiro, buscar a quilometragem atual do veículo
+      const { data: vehicleData, error: fetchError } = await supabase
+        .from('vehicles')
+        .select('mileage')
+        .eq('id', vehicleId)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      // Só atualiza se a nova quilometragem for maior que a atual
+      if (vehicleData && (!vehicleData.mileage || newMileage > vehicleData.mileage)) {
+        const { error: updateError } = await supabase
+          .from('vehicles')
+          .update({ 
+            mileage: newMileage,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', vehicleId);
+
+        if (updateError) throw updateError;
+      }
+    } catch (err) {
+      console.error('Erro ao atualizar quilometragem do veículo:', err);
+      throw err;
+    }
+  };
 
   const fetchInspections = async () => {
     try {
@@ -119,6 +151,11 @@ export const useInspections = () => {
         }
       }
       
+      // Atualizar quilometragem do veículo se fornecida
+      if (newInspection.vehicle_id && newInspection.mileage) {
+        await updateVehicleMileage(newInspection.vehicle_id, newInspection.mileage);
+      }
+      
       await fetchInspections();
       await fetchStatistics();
       return newInspection;
@@ -157,6 +194,12 @@ export const useInspections = () => {
       
       console.log('Inspection updated successfully:', data);
       setInspections(prev => prev.map(i => i.id === id ? data : i));
+      
+      // Atualizar quilometragem do veículo se fornecida
+      if (data.vehicle_id && data.mileage) {
+        await updateVehicleMileage(data.vehicle_id, data.mileage);
+      }
+      
       await fetchStatistics();
       return data;
     } catch (err) {
@@ -201,6 +244,23 @@ export const useInspections = () => {
 
       if (error) throw error;
       setInspections(prev => prev.filter(i => i.id !== id));
+      
+      // Se a inspeção tinha quilometragem, atualizar o veículo com a maior quilometragem das inspeções restantes
+      const inspection = inspections.find(i => i.id === id);
+      if (inspection?.vehicle_id && inspection.mileage) {
+        const { data: latestInspection, error: fetchError } = await supabase
+          .from('inspections')
+          .select('mileage')
+          .eq('vehicle_id', inspection.vehicle_id)
+          .order('mileage', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (!fetchError && latestInspection) {
+          await updateVehicleMileage(inspection.vehicle_id, latestInspection.mileage);
+        }
+      }
+      
       await fetchStatistics();
     } catch (err) {
       throw new Error(err instanceof Error ? err.message : 'Failed to delete inspection');

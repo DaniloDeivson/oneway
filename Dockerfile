@@ -1,5 +1,5 @@
 # Build stage
-FROM node:18-alpine AS build
+FROM node:20-alpine AS build
 
 WORKDIR /app
 
@@ -26,7 +26,7 @@ RUN npx vite build
 RUN ls -la /app/dist/
 
 # Production stage
-FROM nginx:alpine AS production
+FROM nginx:1.27-alpine AS production
 
 # Garante que o diretório de destino existe
 RUN mkdir -p /usr/share/nginx/html

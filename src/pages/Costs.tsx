@@ -89,8 +89,9 @@ const CostModal: React.FC<{
     }));
   };
 
+  const isAmountToDefine = cost && cost.amount === 0 && cost.status === 'Pendente';
   const isAutomaticCost = cost?.origin && cost.origin !== 'Manual';
-  const isViewOnly = isReadOnly || isAutomaticCost || Boolean(cost?.id);
+  const isViewOnly = isReadOnly || (isAutomaticCost && !isAmountToDefine) || (cost?.id && !isAmountToDefine);
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -158,7 +159,7 @@ const CostModal: React.FC<{
                 onChange={handleChange}
                 className="w-full border border-secondary-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
                 required
-                disabled={isViewOnly}
+                disabled={!!isViewOnly}
               >
                 <option value="Multa">Multa</option>
                 <option value="Funilaria">Funilaria</option>
@@ -182,7 +183,7 @@ const CostModal: React.FC<{
                 onChange={handleChange}
                 className="w-full border border-secondary-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
                 required
-                disabled={isViewOnly}
+                disabled={!!isViewOnly}
               >
                 <option value="Manual">Lançamento Manual</option>
                 <option value="Patio">Controle de Pátio</option>
@@ -203,7 +204,7 @@ const CostModal: React.FC<{
               onChange={handleChange}
               className="w-full border border-secondary-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
               required
-              disabled={isViewOnly}
+              disabled={!!isViewOnly}
             >
               <option value="">Selecione um veículo</option>
               {vehicles.map(vehicle => (
@@ -221,10 +222,10 @@ const CostModal: React.FC<{
             </label>
             <select
               name="department"
-              value={formData.department ? formData.department : ''}
+              value={formData.department || ''}
               onChange={handleChange}
               className="w-full border border-secondary-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
-              disabled={isViewOnly}
+              disabled={!!isViewOnly}
             >
               <option value="">Selecione um departamento (opcional)</option>
               <option value="Cobrança">Cobrança</option>
@@ -243,11 +244,11 @@ const CostModal: React.FC<{
               <input
                 type="text"
                 name="customer_name"
-                value={formData.customer_name}
+                value={formData.customer_name ?? ''}
                 onChange={handleChange}
                 className="w-full border border-secondary-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
                 placeholder="Nome do cliente (opcional)"
-                disabled={isViewOnly}
+                disabled={!!isViewOnly}
               />
             </div>
             <div>
@@ -257,11 +258,11 @@ const CostModal: React.FC<{
               <input
                 type="text"
                 name="contract_id"
-                value={formData.contract_id}
+                value={formData.contract_id ?? ''}
                 onChange={handleChange}
                 className="w-full border border-secondary-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
                 placeholder="ID do contrato (opcional)"
-                disabled={isViewOnly}
+                disabled={!!isViewOnly}
               />
             </div>
           </div>
@@ -272,10 +273,10 @@ const CostModal: React.FC<{
             </label>
             <select
               name="created_by_employee_id"
-              value={formData.created_by_employee_id}
+              value={formData.created_by_employee_id || ''}
               onChange={handleChange}
               className="w-full border border-secondary-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
-              disabled={isViewOnly}
+              disabled={!!isViewOnly}
             >
               <option value="">Sistema (automático)</option>
               {employees.map(employee => (
@@ -298,7 +299,7 @@ const CostModal: React.FC<{
               className="w-full border border-secondary-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
               placeholder="Descreva o custo..."
               required
-              disabled={isViewOnly}
+              disabled={!!isViewOnly}
             />
           </div>
 
@@ -307,20 +308,26 @@ const CostModal: React.FC<{
               <label className="block text-sm font-medium text-secondary-700 mb-2">
                 Valor (R$) *
               </label>
-              <input
-                type="number"
-                name="amount"
-                value={formData.amount}
-                onChange={handleChange}
-                className="w-full border border-secondary-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                step="0.01"
-                min="0"
-                required
-                disabled={isViewOnly}
-              />
+              {isViewOnly && !isAmountToDefine ? (
+                <div className="w-full px-3 py-2 rounded-lg bg-secondary-50 border border-secondary-200 text-secondary-800 font-semibold cursor-not-allowed">
+                  {formData.amount === 0 ? 'Orçamento' : `R$ ${formData.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+                </div>
+              ) : (
+                <input
+                  type="number"
+                  name="amount"
+                  value={formData.amount ?? 0}
+                  onChange={handleChange}
+                  className="w-full border border-secondary-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  step="0.01"
+                  min="0"
+                  required
+                  disabled={!!isViewOnly && !isAmountToDefine}
+                />
+              )}
               {formData.amount === 0 && (
                 <p className="text-xs text-warning-600 mt-1">
-                  Valor zerado - será exibido como "A Definir"
+                  Valor zerado - será exibido como "Orçamento"
                 </p>
               )}
             </div>
@@ -335,7 +342,7 @@ const CostModal: React.FC<{
                 onChange={handleChange}
                 className="w-full border border-secondary-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
                 required
-                disabled={isViewOnly}
+                disabled={!!isViewOnly}
               />
             </div>
           </div>
@@ -346,11 +353,11 @@ const CostModal: React.FC<{
             </label>
             <select
               name="status"
-              value={formData.status}
+              value={formData.status || 'Pendente'}
               onChange={handleChange}
               className="w-full border border-secondary-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
               required
-              disabled={isViewOnly && cost?.status !== 'Pendente'}
+              disabled={Boolean(isViewOnly && cost?.status !== 'Pendente')}
             >
               <option value="Pendente">Pendente</option>
               <option value="Pago">Pago</option>
@@ -365,11 +372,11 @@ const CostModal: React.FC<{
             <input
               type="text"
               name="document_ref"
-              value={formData.document_ref}
+              value={formData.document_ref || ''}
               onChange={handleChange}
               className="w-full border border-secondary-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
               placeholder="NF, número da multa, etc."
-              disabled={isViewOnly}
+              disabled={!!isViewOnly}
             />
           </div>
 
@@ -379,12 +386,12 @@ const CostModal: React.FC<{
             </label>
             <textarea
               name="observations"
-              value={formData.observations}
+              value={formData.observations || ''}
               onChange={handleChange}
               rows={3}
               className="w-full border border-secondary-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
               placeholder="Observações adicionais..."
-              disabled={isViewOnly}
+              disabled={!!(isViewOnly && !isAmountToDefine)}
             />
           </div>
 
@@ -420,7 +427,7 @@ const CostModal: React.FC<{
 };
 
 export const Costs: React.FC = () => {
-  const { costs, loading, createCost, updateCost, debugAutomaticCosts, reprocessInspectionCosts, authorizePurchase, refetch, markAsPaid } = useCosts();
+  const { costs, loading, createCost, updateCost, updateCostEstimate, fetchRealCosts, debugAutomaticCosts, reprocessInspectionCosts, authorizePurchase, refetch, markAsPaid } = useCosts();
   const { vehicles } = useVehicles();
   const { employees } = useEmployees();
   const { isAdmin, isManager } = useAuth();
@@ -429,8 +436,10 @@ export const Costs: React.FC = () => {
   const [departmentFilter, setDepartmentFilter] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [isEstimateModalOpen, setIsEstimateModalOpen] = useState(false);
   const [selectedCost, setSelectedCost] = useState<Cost | undefined>(undefined);
   const [reprocessing, setReprocessing] = useState(false);
+  const [loadingRealCosts, setLoadingRealCosts] = useState(false);
 
   // Debug automatic costs on component mount
   useEffect(() => {
@@ -518,8 +527,7 @@ export const Costs: React.FC = () => {
     if (confirm('Confirmar autorização de compra?')) {
       try {
         await authorizePurchase(cost.id);
-      } catch (error) {
-        console.error('Error authorizing purchase:', error);
+      } catch {
         alert('Erro ao autorizar compra');
       }
     }
@@ -557,6 +565,36 @@ export const Costs: React.FC = () => {
     }
   };
 
+  const handleLoadRealCosts = async () => {
+    setLoadingRealCosts(true);
+    try {
+      await fetchRealCosts();
+      alert('Custos reais carregados com sucesso!');
+    } catch (error) {
+      alert('Erro ao carregar custos reais: ' + (error instanceof Error ? error.message : 'Erro desconhecido'));
+    } finally {
+      setLoadingRealCosts(false);
+    }
+  };
+
+  const handleEditEstimate = (cost: Cost) => {
+    setSelectedCost(cost);
+    setIsEstimateModalOpen(true);
+  };
+
+  const handleUpdateEstimate = async (amount: number, observations?: string) => {
+    if (!selectedCost) return;
+    
+    try {
+      await updateCostEstimate(selectedCost.id, amount, observations);
+      setIsEstimateModalOpen(false);
+      setSelectedCost(undefined);
+      alert('Orçamento atualizado com sucesso!');
+    } catch (error) {
+      alert('Erro ao atualizar orçamento: ' + (error instanceof Error ? error.message : 'Erro desconhecido'));
+    }
+  };
+
   const totalCosts = filteredCosts.reduce((sum, cost) => sum + cost.amount, 0);
   const pendingCosts = filteredCosts.filter(cost => cost.status === 'Pendente').length;
   const costsToDefine = filteredCosts.filter(cost => cost.amount === 0 && cost.status === 'Pendente').length;
@@ -580,6 +618,20 @@ export const Costs: React.FC = () => {
           <p className="text-secondary-600 mt-1 lg:mt-2">Controle todos os custos da operação com rastreabilidade completa</p>
         </div>
         <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3 w-full sm:w-auto">
+          <Button 
+            variant="secondary" 
+            onClick={handleLoadRealCosts}
+            disabled={loadingRealCosts}
+            size="sm" 
+            className="w-full sm:w-auto"
+          >
+            {loadingRealCosts ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4 mr-2" />
+            )}
+            Carregar Custos Reais
+          </Button>
           {isAdmin && (
             <Button 
               variant="secondary" 
@@ -841,6 +893,7 @@ export const Costs: React.FC = () => {
               costs={costsWithVehiclePlate}
               onView={handleView}
               onEdit={isAdmin || isManager ? handleEdit : undefined}
+              onEditEstimate={handleEditEstimate}
               onAuthorize={isAdmin || isManager ? handleAuthorizePurchase : undefined}
               onMarkAsPaid={isAdmin || isManager ? handleMarkAsPaid : undefined}
               canEdit={isAdmin || isManager}
@@ -881,6 +934,90 @@ export const Costs: React.FC = () => {
         onSave={handleSave}
         isReadOnly={true}
       />
+
+      {/* Estimate Edit Modal */}
+      {isEstimateModalOpen && selectedCost && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-semibold text-secondary-900">
+                Editar Orçamento
+              </h2>
+              <button 
+                onClick={() => setIsEstimateModalOpen(false)}
+                className="text-secondary-400 hover:text-secondary-600 p-2"
+              >
+                ×
+              </button>
+            </div>
+            
+            <div className="mb-4">
+              <p className="text-sm text-secondary-600 mb-2">
+                <strong>Descrição:</strong> {selectedCost.description}
+              </p>
+              <p className="text-sm text-secondary-600 mb-2">
+                <strong>Categoria:</strong> {selectedCost.category}
+              </p>
+              <p className="text-sm text-secondary-600 mb-2">
+                <strong>Veículo:</strong> {selectedCost.vehicles?.plate || selectedCost.vehicle_plate || '-'}
+              </p>
+            </div>
+
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const formData = new FormData(e.currentTarget);
+              const amount = Number(formData.get('amount'));
+              const observations = formData.get('observations') as string;
+              handleUpdateEstimate(amount, observations);
+            }}>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-secondary-700 mb-2">
+                    Valor do Orçamento *
+                  </label>
+                  <input
+                    type="number"
+                    name="amount"
+                    step="0.01"
+                    min="0"
+                    required
+                    className="w-full border border-secondary-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    placeholder="0,00"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-secondary-700 mb-2">
+                    Observações
+                  </label>
+                  <textarea
+                    name="observations"
+                    rows={3}
+                    className="w-full border border-secondary-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    placeholder="Observações sobre o orçamento..."
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-3 mt-6">
+                <button
+                  type="button"
+                  onClick={() => setIsEstimateModalOpen(false)}
+                  className="px-4 py-2 text-secondary-600 hover:text-secondary-800"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  Salvar Orçamento
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

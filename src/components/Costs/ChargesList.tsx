@@ -1,7 +1,7 @@
 import React from 'react';
 import { Badge } from '../UI/Badge';
 import { Button } from '../UI/Button';
-import { Edit, AlertTriangle, Car, User, FileText, Calendar, DollarSign, CheckCircle, Clock } from 'lucide-react';
+import { Edit, AlertTriangle, Car, User, FileText, Calendar, DollarSign, CheckCircle, Trash2 } from 'lucide-react';
 import { Database } from '../../types/database';
 
 type CustomerCharge = Database['public']['Tables']['customer_charges']['Row'] & {
@@ -17,10 +17,10 @@ interface ChargesListProps {
   onView: (charge: CustomerCharge) => void;
   onEdit?: (charge: CustomerCharge) => void;
   onMarkAsPaid?: (charge: CustomerCharge) => void;
-  onMarkAsAuthorized?: (charge: CustomerCharge) => void;
+  onDelete?: (charge: CustomerCharge) => void;
   canEdit?: boolean;
   canMarkAsPaid?: boolean;
-  canMarkAsAuthorized?: boolean;
+  canDelete?: boolean;
 }
 
 export const ChargesList: React.FC<ChargesListProps> = ({
@@ -28,10 +28,10 @@ export const ChargesList: React.FC<ChargesListProps> = ({
   onView,
   onEdit,
   onMarkAsPaid,
-  onMarkAsAuthorized,
+  onDelete,
   canEdit = false,
   canMarkAsPaid = false,
-  canMarkAsAuthorized = false
+  canDelete = false
 }) => {
   const getStatusBadge = (status: string) => {
     if (status === 'Pago') {
@@ -176,17 +176,6 @@ export const ChargesList: React.FC<ChargesListProps> = ({
                       Pago
                     </Button>
                   )}
-                  {charge.status === 'Pendente' && canMarkAsAuthorized && (
-                    <Button 
-                      onClick={() => onMarkAsAuthorized && onMarkAsAuthorized(charge)}
-                      variant="secondary"
-                      size="sm"
-                      className="flex items-center"
-                    >
-                      <Clock className="h-3 w-3 mr-1" />
-                      Autorizar
-                    </Button>
-                  )}
                   <button 
                     onClick={() => onView(charge)}
                     className="text-primary-600 hover:text-primary-800 text-sm font-medium"
@@ -199,6 +188,15 @@ export const ChargesList: React.FC<ChargesListProps> = ({
                       className="text-secondary-600 hover:text-secondary-800"
                     >
                       <Edit className="h-4 w-4" />
+                    </button>
+                  )}
+                  {canDelete && (
+                    <button 
+                      onClick={() => onDelete && onDelete(charge)}
+                      className="text-error-600 hover:text-error-800"
+                      title="Excluir cobrança"
+                    >
+                      <Trash2 className="h-4 w-4" />
                     </button>
                   )}
                 </div>

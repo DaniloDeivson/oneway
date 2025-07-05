@@ -34,10 +34,10 @@ BEGIN
   END IF;
   
   -- Calcular dias de locação
-  v_days := EXTRACT(DAY FROM (v_contract.end_date::date - v_contract.start_date::date)) + 1;
+  v_days := (v_contract.end_date::date - v_contract.start_date::date) + 1;
   
-  -- Buscar diária do veículo
-  SELECT daily_rate INTO v_daily_rate FROM vehicles WHERE id = v_contract.vehicle_id;
+  -- Usar diária do contrato
+  v_daily_rate := v_contract.daily_rate;
   
   -- Calcular valor base da locação
   v_total := COALESCE(v_daily_rate, 0) * v_days;

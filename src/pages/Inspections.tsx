@@ -160,8 +160,8 @@ const InspectionModal: React.FC<InspectionModalProps> = ({
         if (damagesWithId.length > 0) {
           toast.success(`${damagesWithId.length} danos adicionados ao carrinho!`);
         }
-        // Limpa o carrinho após adicionar (evita duplicidade ao abrir novamente)
-        return damagesWithId;
+        // ACUMULA os danos novos aos já existentes
+        return [...prev, ...damagesWithId];
       });
     }
   };
@@ -226,6 +226,9 @@ export const Inspections: React.FC = () => {
   const [selectedViewInspection, setSelectedViewInspection] = useState<Inspection | null>(null);
 
   const canManageInspections = isAdmin || isManager || hasPermission('inspections');
+
+  // Filtrar veículos inativos para seleção
+  const selectableVehicles = vehicles.filter(v => v.status !== 'Inativo');
 
   const filteredInspections = inspections.filter(inspection => {
     const matchesSearch = 
@@ -798,7 +801,7 @@ export const Inspections: React.FC = () => {
       <VehicleSearchModal
         isOpen={isVehicleSearchOpen}
         onClose={() => setIsVehicleSearchOpen(false)}
-        vehicles={vehicles}
+        vehicles={selectableVehicles}
         onSelectVehicle={handleVehicleSelected}
         loading={loading}
       />

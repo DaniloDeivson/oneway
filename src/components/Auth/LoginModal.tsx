@@ -26,7 +26,7 @@ interface LoginModalProps {
 }
 
 const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
-  const { login, user, loginLoading } = useAuth();
+  const { signIn, isLoading, error } = useAuth();
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -39,22 +39,16 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
     reset,
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
-    defaultValues: {
-      email: '',
-      password: '',
-    },
+    mode: 'onTouched',
   });
 
-  // Redirect when user is authenticated and loginLoading is false
+  // Redirect when user is authenticated
   useEffect(() => {
-    if (user && !loginLoading && isOpen) {
-      // Aguarda o carregamento das permissões antes de redirecionar
-      setTimeout(() => {
-        navigate('/', { replace: true });
-        if (onClose) onClose();
-      }, 200); // Pequeno delay para garantir que o contexto está atualizado
+    if (signIn.user && isOpen) {
+      navigate('/', { replace: true });
+      onClose();
     }
-  }, [user, loginLoading, onClose, navigate, isOpen]);
+  }, [signIn.user, isOpen, onClose, navigate]);
 
   // Reset form when modal opens
   useEffect(() => {
@@ -68,26 +62,40 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
     }
   }, [isOpen, reset]);
 
+  // Update error message when auth error changes
+  useEffect(() => {
+    if (error) {
+      setErrorMsg(error);
+      setIsSubmitting(false);
+    }
+  }, [error]);
+
   const onSubmit = async (data: LoginFormData) => {
-    setErrorMsg(null);
-    setIsSubmitting(true);
+    if (isSubmitting) return;
+    
     try {
-      await login(data.email, data.password);
-      // Login successful - useEffect will handle redirect
-    } catch (error: unknown) {
-      setErrorMsg(error instanceof Error ? error.message : 'Erro ao autenticar');
+      setIsSubmitting(true);
+      setErrorMsg(null);
+      
+      await signIn(data.email, data.password);
+    } catch (error) {
+      setErrorMsg('Erro inesperado ao tentar fazer login.');
+      console.error('Erro no submit do login:', error);
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleClose = () => {
-    if (!isSubmitting && !loginLoading) {
+    if (!isSubmitting && !isLoading) {
       reset();
       setErrorMsg(null);
+      setIsSubmitting(false);
       onClose();
     }
   };
+
+  const isLoadingModal = isSubmitting || isLoading;
 
   return (
     <Transition appear show={isOpen} as={Fragment}>
@@ -119,7 +127,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
                 <div className="relative bg-gradient-to-br from-blue-50 to-indigo-100 px-6 py-8">
                   <button
                     onClick={handleClose}
-                    disabled={isSubmitting || loginLoading}
+                    disabled={isLoadingModal}
                     className="absolute right-4 top-4 rounded-full p-2 text-gray-400 hover:bg-white/50 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
                   >
                     <X className="h-5 w-5" />
@@ -175,7 +183,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
                             }
                           `}
                           placeholder="seu@email.com"
-                          disabled={isSubmitting || loginLoading}
+                          disabled={isLoadingModal}
                           autoComplete="email"
                         />
                       </div>
@@ -203,15 +211,15 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
                               : 'border-gray-300 bg-white hover:border-gray-400'
                             }
                           `}
-                          placeholder="••••••••"
-                          disabled={isSubmitting || loginLoading}
+                          placeholder="Sua senha"
+                          disabled={isLoadingModal}
                           autoComplete="current-password"
                         />
                         <button
                           type="button"
                           onClick={() => setShowPassword(!showPassword)}
-                          className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 focus:outline-none transition-colors duration-200"
-                          disabled={isSubmitting || loginLoading}
+                          disabled={isLoadingModal}
+                          className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
                         >
                           {showPassword ? (
                             <EyeOff className="h-5 w-5" />
@@ -225,30 +233,20 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
                       )}
                     </div>
 
-                    <div className="flex space-x-3 pt-4">
-                      <button
-                        type="button"
-                        onClick={handleClose}
-                        disabled={isSubmitting || loginLoading}
-                        className="flex-1 px-4 py-3 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-                      >
-                        Cancelar
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={isSubmitting || loginLoading}
-                        className="flex-1 px-4 py-3 text-sm font-medium text-white bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg hover:from-blue-600 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl"
-                      >
-                        {isSubmitting || loginLoading ? (
-                          <div className="flex items-center justify-center">
-                            <Loader2 className="h-5 w-5 animate-spin mr-2" />
-                            Entrando...
-                          </div>
-                        ) : (
-                          'Entrar'
-                        )}
-                      </button>
-                    </div>
+                    <button
+                      type="submit"
+                      disabled={isLoadingModal}
+                      className="w-full flex justify-center items-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
+                    >
+                      {isLoadingModal ? (
+                        <>
+                          <Loader2 className="animate-spin h-5 w-5 mr-2" />
+                          Entrando...
+                        </>
+                      ) : (
+                        'Entrar'
+                      )}
+                    </button>
                   </form>
                 </div>
               </Dialog.Panel>

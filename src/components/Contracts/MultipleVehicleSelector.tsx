@@ -212,11 +212,12 @@ export const MultipleVehicleSelector: React.FC<MultipleVehicleSelectorProps> = (
                   value={selectedVehicleId}
                   onChange={(e) => setSelectedVehicleId(e.target.value)}
                   className="w-full border border-secondary-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  disabled={!startDate || !endDate}
                 >
                   <option value="">
-                    {filteredVehicles.length === 0 ? 
-                      'Nenhum veículo disponível' : 
-                      'Selecione um veículo'
+                    {!startDate || !endDate ?
+                      'Selecione as datas do contrato primeiro' :
+                      (filteredVehicles.length === 0 ? 'Nenhum veículo disponível' : 'Selecione um veículo')
                     }
                   </option>
                   {filteredVehicles.map((vehicle) => (

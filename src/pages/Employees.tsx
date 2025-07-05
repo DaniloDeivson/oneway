@@ -5,38 +5,53 @@ import { Badge } from '../components/UI/Badge';
 import { useEmployees } from '../hooks/useEmployees';
 import { Plus, Search, Filter, UserCheck, Loader2, Edit, Trash2, Mail, Phone } from 'lucide-react';
 import RegisterForm from '../components/Auth/RegisterForm';
+import { UpdateForm } from '../components/Auth/UpdateForm';
 import toast from 'react-hot-toast';
+import type { Employee } from '../types/database';
+import { getRoleLabel } from '../types';
+
+
+
+type EmployeeWithPermissions = Employee & {
+  permissions?: Record<string, boolean>;
+};
 
 // Modal para editar/adicionar funcionário
-const EmployeeModal: React.FC<{
-  isOpen: boolean;
-  onClose: () => void;
-  employee?: any;
-  onSave: (data: any) => Promise<void>;
-}> = ({ isOpen, onClose, employee, onSave }) => {
+const EmployeeCreateModal: React.FC<{ isOpen: boolean; onClose: () => void; onSuccess: () => void; }> = ({ isOpen, onClose, onSuccess }) => {
   if (!isOpen) return null;
-
-  const handleSuccess = () => {
-    onClose();
-    toast.success(employee ? 'Funcionário atualizado com sucesso!' : 'Funcionário cadastrado com sucesso!');
-  };
-
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg p-4 lg:p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-4 lg:mb-6">
-          <h2 className="text-lg lg:text-xl font-semibold text-secondary-900">
-            {employee ? 'Editar Funcionário' : 'Novo Funcionário'}
-          </h2>
-          <button onClick={onClose} className="text-secondary-400 hover:text-secondary-600 p-2">
-            ×
-          </button>
+          <h2 className="text-lg lg:text-xl font-semibold text-secondary-900">Novo Funcionário</h2>
+          <button onClick={onClose} className="text-secondary-400 hover:text-secondary-600 p-2">×</button>
         </div>
+        <RegisterForm onSuccess={onSuccess} onCancel={onClose} />
+      </div>
+    </div>
+  );
+};
 
-        <RegisterForm 
-          onSuccess={handleSuccess}
-          onCancel={onClose}
-          initialData={employee}
+const EmployeeEditModal: React.FC<{ 
+  isOpen: boolean; 
+  onClose: () => void; 
+  employee: EmployeeWithPermissions; 
+  updateEmployee: (id: string, data: Partial<Employee>) => Promise<unknown>; 
+  onSuccess: () => void; 
+}> = ({ isOpen, onClose, employee, updateEmployee, onSuccess }) => {
+  if (!isOpen || !employee) return null;
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg p-4 lg:p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center mb-4 lg:mb-6">
+          <h2 className="text-lg lg:text-xl font-semibold text-secondary-900">Editar Funcionário</h2>
+          <button onClick={onClose} className="text-secondary-400 hover:text-secondary-600 p-2">×</button>
+        </div>
+        <UpdateForm 
+          onSuccess={onSuccess} 
+          onCancel={onClose} 
+          initialData={employee} 
+          updateEmployee={updateEmployee} 
         />
       </div>
     </div>
@@ -44,11 +59,12 @@ const EmployeeModal: React.FC<{
 };
 
 export const Employees: React.FC = () => {
-  const { employees, loading, updateEmployee, deleteEmployee } = useEmployees();
+  const { employees, loading, updateEmployee, deleteEmployee, refetch } = useEmployees();
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedEmployee, setSelectedEmployee] = useState<any>(undefined);
+  const [selectedEmployee, setSelectedEmployee] = useState<EmployeeWithPermissions | undefined>(undefined);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   const filteredEmployees = employees.filter(employee => {
     const matchesSearch = 
@@ -64,7 +80,7 @@ export const Employees: React.FC = () => {
   const getRoleBadge = (role: string) => {
     const variants = {
       'Admin': 'error',
-      'Manager': 'primary',
+      'Manager': 'info',
       'Mechanic': 'warning',
       'PatioInspector': 'info',
       'Sales': 'success',
@@ -87,7 +103,7 @@ export const Employees: React.FC = () => {
     </Badge>;
   };
 
-  const getAdditionalRolesBadges = (employee: any) => {
+  const getAdditionalRolesBadges = (employee: EmployeeWithPermissions) => {
     if (!employee.permissions) return null;
     
     // Determine additional roles based on permissions
@@ -108,23 +124,6 @@ export const Employees: React.FC = () => {
         ))}
       </div>
     );
-  };
-
-  const getRoleLabel = (role: string) => {
-    const roleMap: Record<string, string> = {
-      'Admin': 'Administrador',
-      'Manager': 'Gerente',
-      'Mechanic': 'Mecânico',
-      'PatioInspector': 'Inspetor de Pátio',
-      'Sales': 'Vendedor',
-      'Driver': 'Motorista',
-      'FineAdmin': 'Admin. Multas',
-      'Inventory': 'Estoquista',
-      'Finance': 'Financeiro',
-      'Compras': 'Compras'
-    };
-    
-    return roleMap[role] || role;
   };
 
   // Determine roles from permissions
@@ -159,9 +158,26 @@ export const Employees: React.FC = () => {
     };
   };
 
-  const handleEdit = (employee: any) => {
-    setSelectedEmployee(employee);
-    setIsModalOpen(true);
+  const handleEdit = (employee: Employee) => {
+    // Add permissions based on role
+    const employeeWithPermissions: EmployeeWithPermissions = {
+      ...employee,
+      permissions: {
+        admin: employee.role === 'Admin',
+        fleet: ['Manager', 'Driver'].includes(employee.role),
+        costs: ['Manager'].includes(employee.role),
+        finance: ['Manager', 'Finance'].includes(employee.role),
+        employees: ['Manager'].includes(employee.role),
+        maintenance: ['Mechanic'].includes(employee.role),
+        inspections: ['PatioInspector'].includes(employee.role),
+        contracts: ['Sales'].includes(employee.role),
+        fines: ['FineAdmin'].includes(employee.role),
+        inventory: ['Inventory'].includes(employee.role),
+        purchases: ['Compras'].includes(employee.role)
+      }
+    };
+    setSelectedEmployee(employeeWithPermissions);
+    setIsEditModalOpen(true);
   };
 
   const handleNew = () => {
@@ -169,41 +185,43 @@ export const Employees: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  const handleToggleActive = async (employee: any) => {
+  const handleToggleActive = async (employee: Employee) => {
     try {
       await updateEmployee(employee.id, { active: !employee.active });
       toast.success(`Funcionário ${employee.active ? 'desativado' : 'ativado'} com sucesso!`);
     } catch (error) {
-      toast.error('Erro ao alterar status do funcionário');
+      console.error('Erro ao alterar status do funcionário:', error);
+      toast.error('Erro ao alterar status do funcionário. Verifique o console para mais detalhes.');
     }
   };
 
   const handleDelete = async (id: string) => {
-    console.log('handleDelete called with id:', id);
-    
     if (!id || id === '') {
-      console.error('handleDelete: ID is empty or undefined');
       toast.error('ID do funcionário é inválido');
       return;
     }
-    
-    if (confirm('Tem certeza que deseja excluir este funcionário?')) {
-      console.log('User confirmed deletion, proceeding...');
+    if (confirm('Tem certeza que deseja excluir este funcionário? Esta ação não pode ser desfeita.')) {
       try {
-        console.log('Calling deleteEmployee with id:', id);
         await deleteEmployee(id);
-        console.log('deleteEmployee completed successfully');
-        // Note: toast.success is already called in the deleteEmployee function
+        toast.success('Funcionário excluído com sucesso!');
       } catch (error) {
-        console.error('Error in handleDelete:', error);
-        console.error('Error details:', {
-          message: error instanceof Error ? error.message : 'Unknown error',
-          stack: error instanceof Error ? error.stack : undefined
-        });
-        // Don't show another toast here since deleteEmployee already shows one
+        console.error('Erro ao excluir funcionário:', error);
+        toast.error('Erro ao excluir funcionário. Verifique o console para mais detalhes.');
       }
-    } else {
-      console.log('User cancelled deletion');
+    }
+  };
+
+  // Novo handleSuccess para cadastro e edição
+  const handleSuccess = async () => {
+    try {
+      console.log('Atualizando lista de funcionários...');
+      await refetch();
+      setIsModalOpen(false);
+      setIsEditModalOpen(false);
+      toast.success('Operação realizada com sucesso!');
+    } catch (error) {
+      console.error('Erro ao atualizar lista de funcionários:', error);
+      toast.error('Erro ao atualizar lista de funcionários. Verifique o console para mais detalhes.');
     }
   };
 
@@ -285,16 +303,12 @@ export const Employees: React.FC = () => {
                   <div>
                     <p className="font-medium text-secondary-900">{employee.name}</p>
                     <p className="text-sm text-secondary-600">{employee.contact_info?.email}</p>
-                    {Array.isArray(employee.role) ? employee.role.map((role: string) => (
+                    {[employee.role, ...(employee.roles_extra ?? [])].map(role => (
                       <span key={role} className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-secondary-100 text-secondary-700">
                         {getRoleLabel(role)}
                       </span>
-                    )) : (
-                      <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-secondary-100 text-secondary-700">
-                        {getRoleLabel(employee.role)}
-                      </span>
-                    )}
-                    {getAdditionalRolesBadges(employee)}
+                    ))}
+                    {getAdditionalRolesBadges(employee as EmployeeWithPermissions)}
                   </div>
                   <div className="flex flex-col items-end">
                     {getRoleBadge(employee.role)}
@@ -361,16 +375,12 @@ export const Employees: React.FC = () => {
                           {employee.employee_code && (
                             <div className="text-xs text-secondary-500">Código: {employee.employee_code}</div>
                           )}
-                          {Array.isArray(employee.role) ? employee.role.map((role: string) => (
+                          {[employee.role, ...(employee.roles_extra ?? [])].map(role => (
                             <span key={role} className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-secondary-100 text-secondary-700">
                               {getRoleLabel(role)}
                             </span>
-                          )) : (
-                            <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-secondary-100 text-secondary-700">
-                              {getRoleLabel(employee.role)}
-                            </span>
-                          )}
-                          {getAdditionalRolesBadges(employee)}
+                          ))}
+                          {getAdditionalRolesBadges(employee as EmployeeWithPermissions)}
                         </div>
                       </div>
                     </td>
@@ -442,16 +452,17 @@ export const Employees: React.FC = () => {
         </CardContent>
       </Card>
 
-      <EmployeeModal
+      <EmployeeCreateModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        employee={selectedEmployee}
-        onSave={async (data) => {
-          if (selectedEmployee) {
-            await updateEmployee(selectedEmployee.id, data);
-          }
-          // For new employees, the RegisterForm handles the creation
-        }}
+        onSuccess={handleSuccess}
+      />
+      <EmployeeEditModal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        employee={selectedEmployee as EmployeeWithPermissions}
+        updateEmployee={updateEmployee}
+        onSuccess={handleSuccess}
       />
     </div>
   );

@@ -1,3 +1,66 @@
+import { Database } from './database'
+
+export type Tables<T extends keyof Database['public']['Tables']> = Database['public']['Tables'][T]['Row']
+export type Functions<T extends keyof Database['public']['Functions']> = Database['public']['Functions'][T]
+
+// Tipos específicos
+export type Employee = Tables<'employees'>
+export type RemovedUser = Tables<'removed_users'>
+
+// Tipos de inserção/atualização
+export type EmployeeInsert = Database['public']['Tables']['employees']['Insert']
+export type EmployeeUpdate = Database['public']['Tables']['employees']['Update']
+
+export type RemovedUserInsert = Database['public']['Tables']['removed_users']['Insert']
+export type RemovedUserUpdate = Database['public']['Tables']['removed_users']['Update']
+
+// Tipos de funções
+export type ValidateSession = Functions<'validate_session'>
+export type HasPermission = Functions<'has_permission'>
+
+// Tipos de contexto
+export interface SecurityContext {
+  isAuthenticated: boolean
+  user: Employee | null
+  hasPermission: (permission: string) => Promise<boolean>
+  validateSession: () => Promise<boolean>
+}
+
+// Tipos de resposta
+export interface AuthResponse {
+  success: boolean
+  message: string
+  data?: unknown
+}
+
+export interface UserPermissions {
+  admin: boolean
+  costs: boolean
+  fines: boolean
+  fleet: boolean
+  finance: boolean
+  contracts: boolean
+  dashboard: boolean
+  employees: boolean
+  inventory: boolean
+  purchases: boolean
+  suppliers: boolean
+  statistics: boolean
+  inspections: boolean
+  maintenance: boolean
+}
+
+export interface ContactInfo {
+  email: string
+  phone: string | null
+  status?: 'orphaned' | 'orphaned_duplicate' | 'duplicate_resolved' | null
+  updated_reason?: string
+}
+
+export type PermissionType = keyof UserPermissions
+
+export type Role = 'Admin' | 'Manager' | 'Mechanic' | 'Inspector' | 'User'
+
 export interface Vehicle {
   id: string;
   plate: string;
@@ -97,4 +160,45 @@ export interface StatsData {
   monthlyCosts: number;
   pendingMaintenance: number;
   activeVehicles: number;
+}
+
+// Utilitário central de mapeamento de papéis (roles)
+export const ROLE_LABELS: Record<string, string> = {
+  'Admin': 'Administrador',
+  'Manager': 'Gerente',
+  'Mechanic': 'Mecânico',
+  'PatioInspector': 'Inspetor de Pátio',
+  'FineAdmin': 'Admin. Multas',
+  'Comercial': 'Comercial',
+  'Sales': 'Comercial',
+  'Driver': 'Motorista',
+  'Finance': 'Financeiro',
+  'Financeiro': 'Financeiro',
+  'Inventory': 'Estoque',
+  'Estoque': 'Estoque',
+  'Compras': 'Compras',
+  'Inspector': 'Inspetor',
+  // Adicione outras variações se necessário
+};
+
+export const ROLE_VALUES: Record<string, string> = {
+  'Administrador': 'Admin',
+  'Mecânico': 'Mechanic',
+  'Inspetor de Pátio': 'PatioInspector',
+  'Admin. Multas': 'FineAdmin',
+  'Comercial': 'Comercial',
+  'Gerente': 'Manager',
+  'Motorista': 'Driver',
+  'Financeiro': 'Finance',
+  'Estoque': 'Inventory',
+  'Compras': 'Compras',
+  // Adicione outros papéis conforme necessário
+};
+
+export function getRoleLabel(role: string): string {
+  return ROLE_LABELS[role] || role;
+}
+
+export function getRoleValue(label: string): string {
+  return ROLE_VALUES[label] || label;
 }

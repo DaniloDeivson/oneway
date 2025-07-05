@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { X, User, Mail, Phone, UserCheck, Save, Loader2 } from 'lucide-react';
+import { X, User, Mail, Phone, Save, Loader2 } from 'lucide-react';
 import { Button } from '../UI/Button';
 import { useEmployees } from '../../hooks/useEmployees';
 import toast from 'react-hot-toast';
+import { EmployeeRole } from '../../types/database';
+import { ROLE_LABELS, getRoleLabel } from '../../types';
 
 interface UserEditModalProps {
   isOpen: boolean;
@@ -18,40 +20,10 @@ interface UserEditModalProps {
     active: boolean;
     tenant_id?: string;
     permissions?: Record<string, boolean>;
+    roles_extra?: string[];
   };
   onUserUpdated: () => void;
 }
-
-const JOB_ROLES = {
-  'Admin': 'Administrador',
-  'Manager': 'Gerente',
-  'Mechanic': 'Mecânico',
-  'PatioInspector': 'Inspetor',
-  'Sales': 'Vendedor',
-  'Driver': 'Motorista',
-  'FineAdmin': 'Admin de Multas',
-  'Inventory': 'Estoquista',
-  'Finance': 'Financeiro',
-  'Compras': 'Compras'
-};
-
-// Lista de permissões disponíveis (deve bater com os permissions usados no Sidebar e AuthGuard)
-const MODULE_PERMISSIONS = [
-  { key: 'dashboard', label: 'Dashboard' },
-  { key: 'fleet', label: 'Frota' },
-  { key: 'costs', label: 'Custos' },
-  { key: 'finance', label: 'Financeiro' },
-  { key: 'inventory', label: 'Estoque' },
-  { key: 'contracts', label: 'Clientes & Contratos' },
-  { key: 'inspections', label: 'Controle de Pátio' },
-  { key: 'fines', label: 'Multas' },
-  { key: 'suppliers', label: 'Fornecedores' },
-  { key: 'purchases', label: 'Compras' },
-  { key: 'statistics', label: 'Estatísticas' },
-  { key: 'admin', label: 'Admin Panel' },
-  { key: 'employees', label: 'Funcionários' },
-  { key: 'maintenance', label: 'Manutenção' },
-];
 
 export default function UserEditModal({ isOpen, onClose, user, onUserUpdated }: UserEditModalProps) {
   const { updateEmployee, deleteEmployee, loading } = useEmployees();
@@ -59,19 +31,22 @@ export default function UserEditModal({ isOpen, onClose, user, onUserUpdated }: 
     name: '',
     email: '',
     phone: '',
-    roles: [] as string[],
-    active: true
+    role: '',
+    active: true,
+    roles_extra: [] as string[]
   });
   const [permissions, setPermissions] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (user && isOpen) {
+      console.log('🔄 Carregando dados do usuário:', user);
       setFormData({
         name: user.name || '',
         email: user.contact_info?.email || '',
         phone: user.contact_info?.phone || '',
-        roles: Array.isArray(user.role) ? user.role : [user.role],
-        active: user.active !== undefined ? user.active : true
+        role: user.role || '',
+        active: user.active !== undefined ? user.active : true,
+        roles_extra: Array.isArray(user.roles_extra) ? user.roles_extra : []
       });
       setPermissions(user.permissions || {});
     }
@@ -80,20 +55,21 @@ export default function UserEditModal({ isOpen, onClose, user, onUserUpdated }: 
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     
-    if (!formData.name || !formData.email || formData.roles.length === 0) {
-      toast.error('Por favor, preencha todos os campos obrigatórios e selecione pelo menos uma função');
+    if (!formData.name || !formData.email || !formData.role) {
+      toast.error('Por favor, preencha todos os campos obrigatórios e selecione uma função');
       return;
     }
 
     try {
-      const updates: any = {
+      const updates = {
         name: formData.name,
         contact_info: {
           email: formData.email,
-          phone: formData.phone || null
+          phone: formData.phone || undefined
         },
-        role: formData.roles,
+        role: formData.role as EmployeeRole,
         active: formData.active,
+        roles_extra: formData.roles_extra,
         permissions: permissions,
         updated_at: new Date().toISOString()
       };
@@ -105,9 +81,9 @@ export default function UserEditModal({ isOpen, onClose, user, onUserUpdated }: 
       toast.success('Usuário atualizado com sucesso!');
       onUserUpdated();
       onClose();
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error updating employee:', error);
-      toast.error(error?.message || 'Erro ao atualizar funcionário');
+      toast.error(error instanceof Error ? error.message : 'Erro ao atualizar funcionário');
     }
   };
 
@@ -117,7 +93,7 @@ export default function UserEditModal({ isOpen, onClose, user, onUserUpdated }: 
         await deleteEmployee(user.id);
         onUserUpdated();
         onClose();
-      } catch (error) {
+      } catch {
         // O hook já mostra o erro via toast
       }
     }
@@ -131,16 +107,26 @@ export default function UserEditModal({ isOpen, onClose, user, onUserUpdated }: 
     }));
   };
 
-  const handlePermissionChange = (perm: string) => {
-    setPermissions(prev => ({ ...prev, [perm]: !prev[perm] }));
-  };
-
-  const handleRoleChange = (role: string) => {
+  const handleRoleChange = (roleKey: string, checked: boolean) => {
     setFormData(prev => {
-      const roles = prev.roles.includes(role)
-        ? prev.roles.filter(r => r !== role)
-        : [...prev.roles, role];
-      return { ...prev, roles };
+      let newRoles = prev.roles_extra ? [...prev.roles_extra] : [];
+      if (checked) {
+        if (roleKey !== prev.role && !newRoles.includes(roleKey)) newRoles.push(roleKey);
+      } else {
+        newRoles = newRoles.filter(r => r !== roleKey);
+      }
+      // Se o principal foi desmarcado, escolher outro como principal
+      let newMainRole = prev.role;
+      if (!checked && prev.role === roleKey) {
+        newMainRole = newRoles[0] || '';
+      } else if (checked && !prev.role) {
+        newMainRole = roleKey;
+      }
+      return {
+        ...prev,
+        role: newMainRole,
+        roles_extra: newRoles
+      };
     });
   };
 
@@ -227,19 +213,29 @@ export default function UserEditModal({ isOpen, onClose, user, onUserUpdated }: 
                 <label htmlFor="roles" className="block text-sm font-medium text-gray-700 mb-1">
                   Funções *
                 </label>
-                <div className="grid grid-cols-2 gap-2">
-                  {Object.entries(JOB_ROLES).map(([key, value]) => (
+                <div className="space-y-2">
+                  {Object.entries(ROLE_LABELS).map(([key, value]) => (
                     <label key={key} className="flex items-center space-x-2">
                       <input
                         type="checkbox"
-                        checked={formData.roles.includes(key)}
-                        onChange={() => handleRoleChange(key)}
-                        className="h-4 w-4 text-primary-600 border-gray-300 rounded"
+                        checked={formData.role === key || formData.roles_extra?.includes(key)}
+                        onChange={e => handleRoleChange(key, e.target.checked)}
+                        className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
                       />
-                      <span>{value}</span>
+                      <span className="text-sm text-gray-700">{value}</span>
                     </label>
                   ))}
                 </div>
+                {formData.role && (
+                  <div className="mt-2 text-xs text-gray-500">
+                    <strong>Função principal:</strong> {getRoleLabel(formData.role)}
+                    {formData.roles_extra && formData.roles_extra.length > 0 && (
+                      <div>
+                        <strong>Funções adicionais:</strong> {formData.roles_extra.map(r => getRoleLabel(r)).join(', ')}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center">

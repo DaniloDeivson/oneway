@@ -25,6 +25,9 @@ const FineModal: React.FC<{
 
   if (!isOpen) return null;
 
+  // Filtrar veículos inativos para seleção em multas
+  const selectableVehicles = vehicles.filter(v => v.status !== 'Inativo');
+
   const handleSave = async (formData: any) => {
     setLoading(true);
     try {
@@ -54,7 +57,7 @@ const FineModal: React.FC<{
           onSubmit={handleSave}
           onCancel={onClose}
           fine={fine}
-          vehicles={vehicles}
+          vehicles={selectableVehicles}
           drivers={drivers}
           employees={employees}
           loading={loading}
@@ -78,6 +81,9 @@ export const Fines: React.FC = () => {
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
 
   const canManageFines = isAdmin || isManager || hasPermission('fines');
+
+  // Filtrar veículos inativos para seleção em multas
+  const selectableVehicles = vehicles.filter(v => v.status !== 'Inativo');
 
   // Filter fines to show only those managed by the current user or all if admin
   const filteredFines = fines.filter(fine => {
@@ -535,7 +541,7 @@ export const Fines: React.FC = () => {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         fine={selectedFine}
-        vehicles={vehicles}
+        vehicles={selectableVehicles}
         drivers={drivers}
         employees={employees}
         onSave={handleSave}

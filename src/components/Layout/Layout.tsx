@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Outlet, Navigate, useLocation } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { MobileHeader } from './MobileHeader';
@@ -11,8 +11,11 @@ export const Layout: React.FC = () => {
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
+  // Memoizar o estado de loading para evitar re-renders desnecessários
+  const isLoading = useMemo(() => loading, [loading]);
+
   // Show loading while authentication is being checked
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-100">
         <div className="text-center">

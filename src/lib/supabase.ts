@@ -1,40 +1,89 @@
 import { createClient } from '@supabase/supabase-js';
-import { Database } from '../types/database';
+import type { Database } from '../types/database';
+import type { AuthFlowType } from '@supabase/supabase-js';
 
 // Environment variables for Supabase connection
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 const supabaseServiceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY || '';
+const supabasePassword = '3tFlzYbxrAMjrZ3U';
 
+// Validação das variáveis de ambiente
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('❌ Missing Supabase environment variables');
-  console.error('VITE_SUPABASE_URL:', supabaseUrl ? 'Set' : 'Not set');
-  console.error('VITE_SUPABASE_ANON_KEY:', supabaseAnonKey ? 'Set' : 'Not set');
+  throw new Error('Missing Supabase environment variables');
 }
 
-// Create Supabase client with persistent session configuration
-export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    storage: window.localStorage,
-    storageKey: 'supabase.auth.token',
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: true,
-    flowType: 'pkce'
+// Singleton class for Supabase client
+class SupabaseClient {
+  private static instance: ReturnType<typeof createClient<Database>> | null = null;
+  private static adminInstance: ReturnType<typeof createClient<Database>> | null = null;
+
+  private constructor() {}
+
+  public static getInstance(): ReturnType<typeof createClient<Database>> {
+    if (!SupabaseClient.instance) {
+      SupabaseClient.instance = createClient<Database>(
+        supabaseUrl,
+        supabaseAnonKey,
+        {
+          auth: {
+            storageKey: 'oneway.auth.token',
+            autoRefreshToken: true,
+            persistSession: true,
+            detectSessionInUrl: true,
+            flowType: 'pkce' as AuthFlowType,
+            storage: window.localStorage
+          },
+          global: {
+            headers: {
+              'Accept': 'application/json',
+              'Content-Type': 'application/json',
+              'X-Supabase-Password': supabasePassword
+            }
+          },
+          db: {
+            schema: 'public'
+          }
+        }
+      );
+    }
+    return SupabaseClient.instance;
   }
-});
 
-// Create admin client for administrative operations (user deletion, etc.)
-export const supabaseAdmin = supabaseServiceRoleKey 
-  ? createClient<Database>(supabaseUrl, supabaseServiceRoleKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      }
-    })
-  : null;
+  public static getAdminInstance(): ReturnType<typeof createClient<Database>> | null {
+    if (!supabaseServiceRoleKey) return null;
+    
+    if (!SupabaseClient.adminInstance) {
+      SupabaseClient.adminInstance = createClient<Database>(
+        supabaseUrl,
+        supabaseServiceRoleKey,
+        {
+          auth: {
+            autoRefreshToken: false,
+            persistSession: false
+          },
+          global: {
+            headers: {
+              'Accept': 'application/json',
+              'Content-Type': 'application/json',
+              'X-Supabase-Password': supabasePassword
+            }
+          },
+          db: {
+            schema: 'public'
+          }
+        }
+      );
+    }
+    return SupabaseClient.adminInstance;
+  }
+}
 
-// Default tenant ID for demo purposes
+// Export singleton instances
+export const supabase = SupabaseClient.getInstance();
+export const supabaseAdmin = SupabaseClient.getAdminInstance();
+
+// Default tenant ID
 export const DEFAULT_TENANT_ID = '00000000-0000-0000-0000-000000000001';
 
 // Helper function to check if Supabase is properly configured
@@ -51,13 +100,10 @@ export const isAdminConfigured = (): boolean => {
 export const getCurrentSession = async () => {
   try {
     const { data: { session }, error } = await supabase.auth.getSession();
-    if (error) {
-      console.error('❌ Error getting current session:', error);
-      return null;
-    }
+    if (error) throw error;
     return session;
   } catch (error) {
-    console.error('❌ Exception getting current session:', error);
+    console.error('Error getting current session:', error);
     return null;
   }
 };

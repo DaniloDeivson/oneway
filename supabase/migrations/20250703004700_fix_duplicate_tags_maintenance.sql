@@ -160,7 +160,6 @@ SELECT
   END as is_amount_to_define,
   ct.id as contract_id,
   ct.contract_number,
-  cust.id as customer_id,
   cust.name as customer_name
 FROM costs c
 LEFT JOIN vehicles v ON c.vehicle_id = v.id

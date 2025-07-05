@@ -176,9 +176,11 @@ export const FineForm: React.FC<FineFormProps> = ({
       points: Number(formData.points)
     };
     
+    // Logar o payload para debug
+    console.log('Payload enviado:', submitData);
     try {
       await onSubmit(submitData);
-    } catch (error) {
+    } catch {
       alert('Erro ao salvar multa. Verifique os dados e tente novamente.');
     }
   };
@@ -228,10 +230,18 @@ export const FineForm: React.FC<FineFormProps> = ({
     }
   };
 
+  // Se drivers vier populado, use-o; senão, use employees de role Driver
+  const driverOptions = drivers && drivers.length > 0
+    ? drivers
+    : employees.filter(emp => emp.active && emp.role === 'Driver');
+
   // Filter employees to show only those with FineAdmin role or Admin role or fines permission
   const fineManagers = employees.filter(emp => 
     emp.active && (emp.role === 'Admin' || emp.role === 'Manager' || emp.role === 'FineAdmin' || emp.permissions?.fines)
   );
+
+  // Filtrar veículos inativos
+  const selectableVehicles = vehicles.filter(vehicle => vehicle.status !== 'Inativo');
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4 lg:space-y-6">
@@ -248,9 +258,9 @@ export const FineForm: React.FC<FineFormProps> = ({
             required
           >
             <option value="">Selecione um veículo</option>
-            {vehicles.map(vehicle => (
+            {selectableVehicles.map(vehicle => (
               <option key={vehicle.id} value={vehicle.id}>
-                {vehicle.plate} - {vehicle.model} ({vehicle.year})
+                {vehicle.plate} - {vehicle.model}{vehicle.year ? ` (${vehicle.year})` : ''}
               </option>
             ))}
           </select>
@@ -267,9 +277,11 @@ export const FineForm: React.FC<FineFormProps> = ({
             className="w-full border border-secondary-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
           >
             <option value="">Não informado</option>
-            {drivers.map(driver => (
+            {driverOptions.map(driver => (
               <option key={driver.id} value={driver.id}>
-                {driver.name} {driver.cpf && `(${driver.cpf})`}
+                {driver.name}
+                {driver.cpf ? ` (${driver.cpf})` : ''}
+                {driver.license_number ? ` - CNH: ${driver.license_number}` : ''}
               </option>
             ))}
           </select>

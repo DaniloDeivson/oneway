@@ -32,11 +32,7 @@ SELECT
   CASE 
     WHEN c.amount = 0 AND c.status = 'Pendente' THEN true
     ELSE false
-  END as is_amount_to_define,
-  ct.id as contract_id,
-  ct.contract_number,
-  cust.id as customer_id,
-  cust.name as customer_name
+  END as is_amount_to_define
 FROM costs c
 LEFT JOIN vehicles v ON c.vehicle_id = v.id
 LEFT JOIN employees e ON c.created_by_employee_id = e.id
@@ -55,11 +51,7 @@ SELECT
   d.name as driver_name,
   d.cpf as driver_cpf,
   e.name as employee_name,
-  e.role as employee_role,
-  ct.id as contract_id,
-  ct.contract_number,
-  cust.id as customer_id,
-  cust.name as customer_name
+  e.role as employee_role
 FROM fines f
 LEFT JOIN vehicles v ON f.vehicle_id = v.id
 LEFT JOIN drivers d ON f.driver_id = d.id
@@ -144,8 +136,9 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Recriar função de estatísticas de multas
+DROP FUNCTION IF EXISTS fn_fines_statistics(uuid);
 CREATE OR REPLACE FUNCTION fn_fines_statistics(
-  p_tenant_id uuid DEFAULT '00000000-0000-0000-0000-000000000001'::uuid
+  p_tenant_id uuid
 )
 RETURNS TABLE (
   total_fines bigint,
@@ -180,6 +173,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Recriar função de estatísticas de check-ins de manutenção
+DROP FUNCTION IF EXISTS fn_maintenance_checkins_statistics(uuid);
 CREATE OR REPLACE FUNCTION fn_maintenance_checkins_statistics(
   p_tenant_id uuid DEFAULT '00000000-0000-0000-0000-000000000001'::uuid
 )

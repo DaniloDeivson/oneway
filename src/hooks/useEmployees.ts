@@ -1,220 +1,220 @@
-import { useState, useEffect } from 'react';
-import { supabase, supabaseAdmin, DEFAULT_TENANT_ID, isAdminConfigured } from '../lib/supabase';
+import { useState, useEffect, useCallback } from 'react';
+import { supabase } from '../lib/supabase';
 import { Database } from '../types/database';
-import toast from 'react-hot-toast';
+import { useCache } from '../context/CacheContext';
 
 type Employee = Database['public']['Tables']['employees']['Row'];
-type EmployeeInsert = Database['public']['Tables']['employees']['Insert'];
-type EmployeeUpdate = Database['public']['Tables']['employees']['Update'];
 
-export const useEmployees = () => {
+export function useEmployees() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { get, set, has, delete: deleteCache } = useCache();
 
-  const fetchEmployees = async () => {
+  const fetchEmployees = useCallback(async () => {
     try {
       setLoading(true);
-      console.log('🔄 Fazendo fetch dos funcionários...');
-      
+      setError(null);
+
+      // Verificar cache primeiro
+      const cacheKey = 'employees';
+      if (has(cacheKey)) {
+        const cachedData = get<Employee[]>(cacheKey);
+        if (cachedData) {
+          console.log('📦 Usando funcionários do cache');
+          setEmployees(cachedData);
+          setLoading(false);
+          return;
+        }
+      }
+
       const { data, error } = await supabase
         .from('employees')
         .select('*')
-        .eq('tenant_id', DEFAULT_TENANT_ID)
-        .order('name', { ascending: true });
+        .order('name', { ascending: true })
+        .order('active', { ascending: false }); // Ativos primeiro
 
       if (error) throw error;
-      
-      console.log('📋 Funcionários carregados:', data?.length || 0);
-      console.log('📊 Lista atual:', data?.map(e => ({ name: e.name, email: e.contact_info?.email, active: e.active })));
-      
-      setEmployees(data || []);
+
+      // Salvar no cache
+      set(cacheKey, data, 5 * 60 * 1000); // 5 minutos
+      setEmployees(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
-      toast.error('Erro ao carregar funcionários');
+      console.error('Erro ao buscar funcionários:', err);
+      setError(err instanceof Error ? err.message : 'Erro ao buscar funcionários');
     } finally {
       setLoading(false);
     }
-  };
+  }, [get, set, has]);
 
-  const createEmployee = async (employeeData: Omit<EmployeeInsert, 'tenant_id'>) => {
+  const createEmployee = useCallback(async (employeeData: Partial<Employee>) => {
     try {
       const { data, error } = await supabase
         .from('employees')
-        .insert([{ ...employeeData, tenant_id: DEFAULT_TENANT_ID }])
+        .insert([employeeData])
         .select()
         .single();
 
       if (error) throw error;
-      setEmployees(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)));
-      toast.success('Funcionário cadastrado com sucesso!');
+
+      // Limpar cache e atualizar lista local
+      deleteCache('employees');
+      setEmployees(prev => [data, ...prev]);
       return data;
     } catch (err) {
-      toast.error('Erro ao criar funcionário: ' + (err instanceof Error ? err.message : 'Erro desconhecido'));
-      throw new Error(err instanceof Error ? err.message : 'Failed to create employee');
+      console.error('Erro ao criar funcionário:', err);
+      throw err;
     }
-  };
+  }, [deleteCache]);
 
-  const updateEmployee = async (id: string, updates: EmployeeUpdate) => {
+  const updateEmployee = useCallback(async (id: string, updates: Partial<Employee>) => {
     try {
+      console.log('Atualizando funcionário:', id, updates);
+      
+      // Tentar atualização com retorno dos dados
       const { data, error } = await supabase
         .from('employees')
-        .update({ ...updates, permissions: updates.permissions ?? undefined, updated_at: new Date().toISOString() })
+        .update(updates)
         .eq('id', id)
         .select()
         .single();
 
-      if (error) throw error;
-      setEmployees(prev => prev.map(e => e.id === id ? data : e));
-      toast.success('Funcionário atualizado com sucesso!');
-      return data;
+      if (error) {
+        console.error('Erro do Supabase ao atualizar:', error);
+        
+        // Se falhou com select, tentar sem select
+        const { error: updateError } = await supabase
+          .from('employees')
+          .update(updates)
+          .eq('id', id);
+
+        if (updateError) {
+          console.error('Erro ao atualizar sem select:', updateError);
+          throw updateError;
+        } else {
+          console.log('Atualização realizada sem retorno de dados');
+        }
+      } else {
+        console.log('Funcionário atualizado com sucesso:', data);
+      }
+
+      // Limpar cache e atualizar lista local
+      deleteCache('employees');
+      setEmployees(prev => prev.map(employee => 
+        employee.id === id ? { ...employee, ...updates } : employee
+      ));
+      
+      return data || { id, ...updates };
     } catch (err) {
-      toast.error('Erro ao atualizar funcionário: ' + (err instanceof Error ? err.message : 'Erro desconhecido'));
-      throw new Error(err instanceof Error ? err.message : 'Failed to update employee');
+      console.error('Erro ao atualizar funcionário:', err);
+      throw err;
     }
-  };
+  }, [deleteCache]);
 
-  const deleteEmployee = async (id: string): Promise<void> => {
-    // 1. Validação inicial
-    if (!id?.trim()) {
-      throw new Error('ID do usuário é obrigatório');
-    }
-
-    // 2. Buscar dados do usuário
-    const { data: user, error: fetchError } = await supabase
-      .from('employees')
-      .select('id, name, role, contact_info, active')
-      .eq('id', id)
-      .eq('tenant_id', DEFAULT_TENANT_ID)
-      .single();
-
-    if (fetchError || !user) {
-      throw new Error('Usuário não encontrado');
-    }
-
-    // 3. Validações de segurança
-    if (user.role === 'Admin') {
-      const { data: adminCount } = await supabase
+  const deleteEmployee = useCallback(async (id: string) => {
+    try {
+      console.log('Excluindo funcionário:', id);
+      
+      // Primeiro, buscar o funcionário para obter o email
+      const { data: employee, error: fetchError } = await supabase
         .from('employees')
-        .select('id', { count: 'exact' })
-        .eq('role', 'Admin')
-        .eq('active', true)
-        .eq('tenant_id', DEFAULT_TENANT_ID);
+        .select('contact_info')
+        .eq('id', id)
+        .single();
 
-      if ((adminCount?.length || 0) <= 1) {
-        throw new Error('Não é possível excluir o último administrador');
+      if (fetchError) {
+        console.error('Erro ao buscar funcionário:', fetchError);
+        throw fetchError;
       }
-    }
 
-    if (user.contact_info?.email === 'profitestrategista@gmail.com') {
-      throw new Error('Este usuário não pode ser excluído');
-    }
+      console.log('Funcionário encontrado:', employee);
 
-    // 4. Limpar referências em outras tabelas
-    const cleanupOperations = [
-      supabase.from('service_notes').update({ employee_id: null }).eq('employee_id', id),
-      supabase.from('inspections').update({ employee_id: null }).eq('employee_id', id),
-      supabase.from('contracts').update({ salesperson_id: null }).eq('salesperson_id', id),
-      supabase.from('fines').update({ employee_id: null, driver_id: null }).or(`employee_id.eq.${id},driver_id.eq.${id}`),
-      supabase.from('costs').update({ created_by_employee_id: null }).eq('created_by_employee_id', id)
-    ];
-
-    await Promise.allSettled(cleanupOperations);
-
-    // 5. Registrar remoção para auditoria
-    if (user.contact_info?.email) {
-      await supabase
-        .from('removed_users')
-        .upsert([{
-          id: user.id,
-          email: user.contact_info.email,
-          removed_at: new Date().toISOString()
-        }])
-        .then(() => {}, () => {}); // Ignora erros de conflito
-    }
-
-    // 6. Excluir da tabela employees
-    const { error: deleteError } = await supabase
-      .from('employees')
-      .delete()
-      .eq('id', id)
-      .eq('tenant_id', DEFAULT_TENANT_ID);
-
-    if (deleteError) {
-      throw new Error(`Erro ao excluir usuário: ${deleteError.message}`);
-    }
-
-    // Verificar se foi realmente excluído
-    const { data: checkUser } = await supabase
-      .from('employees')
-      .select('id')
-      .eq('id', id)
-      .single();
-
-    if (checkUser) {
-      throw new Error('Falha na exclusão: usuário ainda existe no banco de dados');
-    }
-
-    // 7. Excluir do sistema de autenticação (opcional)
-    if (isAdminConfigured() && supabaseAdmin) {
+      // Tentar fazer soft delete primeiro (marcar como inativo)
+      let softDeleteSuccess = false;
       try {
-        await supabaseAdmin.auth.admin.deleteUser(id);
-      } catch (authError) {
-        console.warn('Usuário removido da aplicação, mas permanece no sistema de autenticação:', authError);
+        const { error: updateError } = await supabase
+          .from('employees')
+          .update({ active: false, updated_at: new Date().toISOString() })
+          .eq('id', id);
+
+        if (updateError) {
+          console.warn('Erro ao fazer soft delete:', updateError);
+        } else {
+          console.log('Soft delete realizado com sucesso');
+          softDeleteSuccess = true;
+        }
+      } catch (softDeleteError) {
+        console.warn('Erro ao fazer soft delete:', softDeleteError);
       }
+
+      // Se soft delete falhou, tentar DELETE direto
+      if (!softDeleteSuccess) {
+        try {
+          const { error: deleteError } = await supabase
+            .from('employees')
+            .delete()
+            .eq('id', id);
+
+          if (deleteError) {
+            console.error('Erro ao fazer DELETE direto:', deleteError);
+            throw deleteError;
+          } else {
+            console.log('DELETE direto realizado com sucesso');
+          }
+        } catch (deleteError) {
+          console.error('Erro ao fazer DELETE direto:', deleteError);
+          throw deleteError;
+        }
+      }
+
+      // Tentar excluir do auth se tiver email (apenas se tivermos permissões de admin)
+      if (employee?.contact_info?.email) {
+        try {
+          // Buscar o usuário no auth pelo email
+          const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
+          
+          if (!authError && authUsers?.users) {
+            const authUser = authUsers.users.find(user => 
+              user.email === employee.contact_info.email
+            );
+            
+            if (authUser) {
+              const { error: deleteAuthError } = await supabase.auth.admin.deleteUser(authUser.id);
+              if (deleteAuthError) {
+                console.warn('Erro ao excluir usuário do auth:', deleteAuthError);
+              } else {
+                console.log('Usuário excluído do auth com sucesso');
+              }
+            }
+          }
+        } catch (authDeleteError) {
+          console.warn('Erro ao excluir do auth (pode ser falta de permissões):', authDeleteError);
+          // Não falhar se não conseguir excluir do auth
+        }
+      }
+
+      // Limpar cache e atualizar lista local
+      deleteCache('employees');
+      setEmployees(prev => prev.filter(employee => employee.id !== id));
+      
+      console.log('Funcionário excluído com sucesso da lista local');
+    } catch (err) {
+      console.error('Erro ao deletar funcionário:', err);
+      throw err;
     }
-
-    // 8. Atualizar estado local e forçar refetch
-    setEmployees(prev => {
-      const newList = prev.filter(e => e.id !== id);
-      console.log(`🗑️ Removendo usuário ${id} da lista local. Antes: ${prev.length}, Depois: ${newList.length}`);
-      return newList;
-    });
-    
-    // Forçar múltiplos refetch para garantir sincronização
-    setTimeout(() => {
-      console.log('🔄 Fazendo refetch após exclusão (1/3)...');
-      fetchEmployees();
-    }, 100);
-    
-    setTimeout(() => {
-      console.log('🔄 Fazendo refetch após exclusão (2/3)...');
-      fetchEmployees();
-    }, 500);
-    
-    setTimeout(() => {
-      console.log('🔄 Fazendo refetch após exclusão (3/3)...');
-      fetchEmployees();
-    }, 1000);
-    
-    toast.success('Usuário excluído com sucesso!');
-  };
-
-  const getEmployeesByRole = (role: string) => {
-    return employees.filter(emp => emp.role === role && emp.active);
-  };
+  }, [deleteCache]);
 
   useEffect(() => {
     fetchEmployees();
-  }, []);
-
-  const forceRefresh = async () => {
-    console.log('🔄 FORÇANDO ATUALIZAÇÃO COMPLETA...');
-    setEmployees([]); // Limpar lista local
-    setLoading(true);
-    await fetchEmployees();
-    console.log('✅ Atualização forçada concluída!');
-  };
+  }, [fetchEmployees]);
 
   return {
     employees,
     loading,
     error,
+    refetch: fetchEmployees,
     createEmployee,
     updateEmployee,
-    deleteEmployee,
-    getEmployeesByRole,
-    refetch: fetchEmployees,
-    forceRefresh
+    deleteEmployee
   };
-};
+}

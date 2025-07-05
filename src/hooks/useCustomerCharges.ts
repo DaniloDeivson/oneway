@@ -219,6 +219,21 @@ export const useCustomerCharges = () => {
     });
   };
 
+  // Função para verificar quais custos podem ser convertidos em cobranças
+  const getChargeableCosts = async () => {
+    try {
+      const { data, error } = await supabase
+        .rpc('fn_get_chargeable_costs', { p_tenant_id: DEFAULT_TENANT_ID });
+
+      if (error) throw error;
+      
+      return data || [];
+    } catch (err) {
+      console.error('Error fetching chargeable costs:', err);
+      throw new Error(err instanceof Error ? err.message : 'Failed to fetch chargeable costs');
+    }
+  };
+
   useEffect(() => {
     fetchCharges();
   }, []);
@@ -232,6 +247,7 @@ export const useCustomerCharges = () => {
     deleteCharge,
     generateChargesFromCosts,
     getChargeStatistics,
+    getChargeableCosts,
     markAsPaid,
     markAsAuthorized,
     markAsDisputed,

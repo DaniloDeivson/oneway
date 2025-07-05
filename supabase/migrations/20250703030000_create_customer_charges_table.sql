@@ -80,6 +80,8 @@ BEGIN
             c.vehicle_id,
             CASE 
                 WHEN c.category = 'Avaria' THEN 'Dano'
+                WHEN c.category = 'Funilaria' THEN 'Dano'
+                WHEN c.category = 'Multa' THEN 'Dano'
                 WHEN c.category = 'Excesso Km' THEN 'Excesso KM'
                 WHEN c.category = 'Combustível' THEN 'Combustível'
                 WHEN c.category = 'Diária Extra' THEN 'Diária Extra'
@@ -91,14 +93,16 @@ BEGIN
             MAX(c.cost_date) as latest_cost_date
         FROM public.costs c
         WHERE c.tenant_id = p_tenant_id
-            AND c.status IN ('Autorizado', 'Pago')
-            AND c.category IN ('Avaria', 'Excesso Km', 'Combustível', 'Diária Extra')
+            AND c.status IN ('Pendente', 'Autorizado', 'Pago')
+            AND c.category IN ('Avaria', 'Funilaria', 'Multa', 'Excesso Km', 'Combustível', 'Diária Extra')
             AND c.customer_id IS NOT NULL
             AND c.contract_id IS NOT NULL
             AND (p_contract_id IS NULL OR c.contract_id = p_contract_id)
         GROUP BY c.customer_id, c.contract_id, c.vehicle_id, 
                  CASE 
                      WHEN c.category = 'Avaria' THEN 'Dano'
+                     WHEN c.category = 'Funilaria' THEN 'Dano'
+                     WHEN c.category = 'Multa' THEN 'Dano'
                      WHEN c.category = 'Excesso Km' THEN 'Excesso KM'
                      WHEN c.category = 'Combustível' THEN 'Combustível'
                      WHEN c.category = 'Diária Extra' THEN 'Diária Extra'

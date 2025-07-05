@@ -5,36 +5,17 @@ import { Loader2, Users, Trash2, Edit, Shield, Search, RefreshCw } from 'lucide-
 import UserRegistrationSection from './UserRegistrationSection';
 import UserEditModal from './UserEditModal';
 import { toast } from 'react-hot-toast';
-
-// Define job roles for display purposes only
-const JOB_ROLES = {
-  'Admin': { name: 'Administrador', color: 'error' },
-  'Manager': { name: 'Gerente', color: 'primary' },
-  'Mechanic': { name: 'Mecânico', color: 'warning' },
-  'PatioInspector': { name: 'Inspetor', color: 'info' },
-  'Sales': { name: 'Vendedor', color: 'success' },
-  'Driver': { name: 'Motorista', color: 'secondary' },
-  'FineAdmin': { name: 'Administrador de Multas', color: 'error' },
-  'Inventory': { name: 'Estoquista', color: 'warning' },
-  'Finance': { name: 'Financeiro', color: 'primary' },
-  'Compras': { name: 'Compras', color: 'success' }
-};
+import { getRoleLabel } from '../../types';
 
 export default function AdminDashboard() {
   const { isAdmin } = useAuth();
-  const { employees: users, loading, deleteEmployee, refetch, forceRefresh } = useEmployees();
+  const { employees: users, loading, deleteEmployee, refetch } = useEmployees();
   const [searchTerm, setSearchTerm] = useState('');
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [editingUser, setEditingUser] = useState<any>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-
-  // The useEmployees hook handles fetching users automatically
-
-  // This function is now handled by the edit modal
-
-  // This function is now handled by the edit modal
 
   const deleteUser = async (userId: string) => {
     try {
@@ -49,64 +30,6 @@ export default function AdminDashboard() {
       toast.error(message);
     } finally {
       setDeletingUserId(null);
-    }
-  };
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const getAdditionalRolesBadges = (user: any) => {
-    if (!user.permissions) return null;
-    
-    // Determine additional roles based on permissions
-    const additionalRoles = determineRolesFromPermissions(user.permissions)
-      .filter(role => role !== user.role);
-    
-    if (additionalRoles.length === 0) return null;
-    
-    return (
-      <div className="flex flex-wrap gap-1 mt-1">
-        {additionalRoles.map(role => (
-          <span 
-            key={role} 
-            className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-secondary-100 text-secondary-700"
-          >
-            {JOB_ROLES[role as keyof typeof JOB_ROLES]?.name || role}
-          </span>
-        ))}
-      </div>
-    );
-  };
-
-  // Determine roles from permissions
-  const determineRolesFromPermissions = (userPermissions: Record<string, boolean>): string[] => {
-    const roles: string[] = [];
-    
-    // Check each role's default permissions against user permissions
-    Object.keys(JOB_ROLES).forEach(role => {
-      const keyPermissionsForRole = getKeyPermissionsForRole(role);
-      const hasAllKeyPermissions = keyPermissionsForRole.every(perm => userPermissions[perm]);
-      
-      if (hasAllKeyPermissions) {
-        roles.push(role);
-      }
-    });
-    
-    return roles;
-  };
-
-  // Get key permissions that define a role
-  const getKeyPermissionsForRole = (role: string): string[] => {
-    switch (role) {
-      case 'Admin': return ['admin'];
-      case 'Manager': return ['fleet', 'costs', 'finance', 'employees'];
-      case 'Mechanic': return ['maintenance'];
-      case 'PatioInspector': return ['inspections'];
-      case 'Sales': return ['contracts'];
-      case 'Driver': return ['fleet'];
-      case 'FineAdmin': return ['fines'];
-      case 'Inventory': return ['inventory'];
-      case 'Finance': return ['finance'];
-      case 'Compras': return ['purchases'];
-      default: return [];
     }
   };
 
@@ -141,7 +64,7 @@ export default function AdminDashboard() {
   const handleForceRefresh = async () => {
     try {
       setIsRefreshing(true);
-      await forceRefresh();
+      await refetch();
       toast.success('Lista atualizada com sucesso!');
     } catch (error) {
       console.error('Erro ao fazer refresh:', error);
@@ -243,12 +166,12 @@ export default function AdminDashboard() {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                         user.role === 'Admin' ? 'bg-error-100 text-error-800' :
-                        user.role === 'Manager' ? 'bg-primary-100 text-primary-800' :
-                        user.role === 'Mechanic' ? 'bg-warning-100 text-warning-800' :
-                        user.role === 'PatioInspector' ? 'bg-info-100 text-info-800' :
+                        user.role === 'Inspector' ? 'bg-info-100 text-info-800' :
+                        user.role === 'FineAdmin' ? 'bg-warning-100 text-warning-800' :
+                        user.role === 'Sales' ? 'bg-success-100 text-success-800' :
                         'bg-secondary-100 text-secondary-800'
                       }`}>
-                        {JOB_ROLES[user.role as keyof typeof JOB_ROLES]?.name || user.role}
+                        {getRoleLabel(user.role) || user.role}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">

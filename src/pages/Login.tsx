@@ -13,15 +13,24 @@ export const Login: React.FC = () => {
 
   // If user is already logged in, redirect to dashboard
   useEffect(() => {
-    if (user && !loading) {
-      console.log('User detected in Login page, redirecting to dashboard...');
+    // Only redirect if we have finished loading and have a user
+    if (!loading && user) {
       navigate('/', { replace: true });
     }
   }, [user, loading, navigate]);
 
+  // Show loading state while checking auth
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-secondary-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+      </div>
+    );
+  }
+
   // Don't render login form if user is already authenticated
-  if (user && !loading) {
-    return null; // Will redirect via useEffect
+  if (user) {
+    return null;
   }
 
   const handleOpenRegistration = () => {
@@ -71,10 +80,6 @@ export const Login: React.FC = () => {
                 <UserPlus className="h-4 w-4 mr-2" />
                 Criar Nova Conta
               </button>
-
-
-           
-             
             </div>
           </div>
         </div>
@@ -88,16 +93,20 @@ export const Login: React.FC = () => {
       </footer>
 
       {/* Login Modal */}
-      <LoginModal 
-        isOpen={isLoginModalOpen} 
-        onClose={() => setIsLoginModalOpen(false)} 
-      />
+      {!loading && (
+        <>
+          <LoginModal 
+            isOpen={isLoginModalOpen} 
+            onClose={() => setIsLoginModalOpen(false)} 
+          />
 
-      {/* Registration Modal */}
-      <RegistrationModal
-        isOpen={isRegistrationModalOpen}
-        onClose={() => setIsRegistrationModalOpen(false)}
-      />
+          {/* Registration Modal */}
+          <RegistrationModal
+            isOpen={isRegistrationModalOpen}
+            onClose={() => setIsRegistrationModalOpen(false)}
+          />
+        </>
+      )}
     </div>
   );
 };

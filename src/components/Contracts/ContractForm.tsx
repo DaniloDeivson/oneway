@@ -43,10 +43,10 @@ interface ContractFormData {
   daily_rate: number;
   status: string;
   salesperson_id: string;
-  km_limit?: number;
-  price_per_excess_km?: number;
-  price_per_liter?: number;
-  uses_multiple_vehicles?: boolean;
+  km_limit: number;
+  price_per_excess_km: number;
+  price_per_liter: number;
+  uses_multiple_vehicles: boolean;
   vehicles?: ContractVehicleData[];
 }
 
@@ -74,7 +74,7 @@ export const ContractForm: React.FC<ContractFormProps> = ({
   loading = false
 }) => {
   const { user, isAdmin, isManager, hasPermission } = useAuth();
-  const { vehicles, loading: loadingAllVehicles } = useVehicles();
+  const { vehicles, loading: loadingAllVehicles, updateVehicle } = useVehicles();
   const { getAvailableVehicles, checkContractConflicts } = useContracts();
   const [availableVehicles, setAvailableVehicles] = useState<AvailableVehicle[]>([]);
   const [loadingAvailableVehicles, setLoadingAvailableVehicles] = useState(false);
@@ -212,6 +212,23 @@ export const ContractForm: React.FC<ContractFormProps> = ({
     };
 
     await onSubmit(submitData);
+
+    // Atualizar status dos veículos para 'Em Uso' após criar contrato
+    if (useMultipleVehicles) {
+      for (const v of selectedVehicles) {
+        try {
+          await updateVehicle(v.vehicle_id, { status: 'Em Uso' });
+        } catch {
+          // Erro ao atualizar status do veículo, ignorado
+        }
+      }
+    } else if (formData.vehicle_id) {
+      try {
+        await updateVehicle(formData.vehicle_id, { status: 'Em Uso' });
+      } catch {
+        // Erro ao atualizar status do veículo, ignorado
+      }
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -347,7 +364,7 @@ export const ContractForm: React.FC<ContractFormProps> = ({
             onChange={handleChange}
             className="w-full border border-secondary-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
             required
-            disabled={!isAdmin && !isManager && formData.salesperson_id === user?.id}
+            disabled={!isAdmin && !isManager}
           >
             <option value="">Selecione um vendedor</option>
             {salespeople.map(employee => (
@@ -455,13 +472,15 @@ export const ContractForm: React.FC<ContractFormProps> = ({
                 onChange={handleChange}
                 className="w-full pl-10 pr-4 py-2 border border-secondary-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                 required
-                disabled={loadingAllVehicles || loadingAvailableVehicles}
+                disabled={loadingAllVehicles || loadingAvailableVehicles || !formData.start_date || !formData.end_date}
               >
                 <option value="">
-                  {(loadingAllVehicles || loadingAvailableVehicles) ? 'Carregando veículos...' :
-                   (formData.start_date && formData.end_date && availableVehicles.length === 0) ?
-                   'Nenhum veículo disponível no período' :
-                   'Selecione um veículo da frota'}
+                  {(!formData.start_date || !formData.end_date) ?
+                    'Selecione as datas do contrato primeiro' :
+                    (loadingAllVehicles || loadingAvailableVehicles) ? 'Carregando veículos...' :
+                    (formData.start_date && formData.end_date && availableVehicles.length === 0) ?
+                    'Nenhum veículo disponível no período' :
+                    'Selecione um veículo da frota'}
                 </option>
                 {formData.start_date && formData.end_date
                   ? availableVehicles.map(vehicle => (

@@ -1,14 +1,16 @@
 import React from 'react';
 import { Badge } from '../UI/Badge';
 import { Button } from '../UI/Button';
-import { Edit, Eye, AlertTriangle, Car, User, FileText, Calendar, DollarSign, CheckCircle } from 'lucide-react';
+import { Edit, AlertTriangle, Car, User, FileText, DollarSign, CheckCircle } from 'lucide-react';
+import { Cost } from '../../hooks/useCosts';
 
 interface CostsListProps {
-  costs: any[];
-  onView: (cost: any) => void;
-  onEdit?: (cost: any) => void;
-  onAuthorize?: (cost: any) => void;
-  onMarkAsPaid?: (cost: any) => void;
+  costs: Cost[];
+  onView: (cost: Cost) => void;
+  onEdit?: (cost: Cost) => void;
+  onEditEstimate?: (cost: Cost) => void;
+  onAuthorize?: (cost: Cost) => void;
+  onMarkAsPaid?: (cost: Cost) => void;
   canEdit?: boolean;
   canAuthorize?: boolean;
 }
@@ -17,6 +19,7 @@ export const CostsList: React.FC<CostsListProps> = ({
   costs,
   onView,
   onEdit,
+  onEditEstimate,
   onAuthorize,
   onMarkAsPaid,
   canEdit = false,
@@ -36,12 +39,12 @@ export const CostsList: React.FC<CostsListProps> = ({
     const variants = {
       'Multa': 'error',
       'Funilaria': 'warning',
-      'Seguro': 'info',
+      'Seguro': 'success',
       'Avulsa': 'secondary',
-      'Compra': 'primary',
+      'Compra': 'success',
       'Excesso Km': 'error',
       'Diária Extra': 'warning',
-      'Combustível': 'info',
+      'Combustível': 'success',
       'Avaria': 'error'
     } as const;
 
@@ -49,16 +52,16 @@ export const CostsList: React.FC<CostsListProps> = ({
   };
 
   // Helper function to check if cost is auto-generated with amount to define
-  const isAmountToDefine = (cost: any) => {
+  const isAmountToDefine = (cost: Cost) => {
     return cost.amount === 0 && cost.status === 'Pendente';
   };
 
   // Helper function to format cost amount
-  const formatCostAmount = (cost: any) => {
+  const formatCostAmount = (cost: Cost) => {
     if (isAmountToDefine(cost)) {
       return (
         <div className="flex items-center space-x-2">
-          <span className="text-warning-600 font-medium">A Definir</span>
+          <span className="text-warning-600 font-medium">Orçamento</span>
           <AlertTriangle className="h-4 w-4 text-warning-600" />
         </div>
       );
@@ -111,7 +114,7 @@ export const CostsList: React.FC<CostsListProps> = ({
               <td className="py-4 px-6">
                 <div className="flex items-center">
                   <Car className="h-4 w-4 text-secondary-400 mr-2" />
-                  <span className="text-sm font-medium text-secondary-900">{cost.vehicle_plate || '-'}</span>
+                  <span className="text-sm font-medium text-secondary-900">{(cost as Cost & { vehicle_plate?: string }).vehicle_plate || cost.vehicles?.plate || '-'}</span>
                 </div>
               </td>
               <td className="py-4 px-6 text-sm text-secondary-600">
@@ -167,7 +170,7 @@ export const CostsList: React.FC<CostsListProps> = ({
                       </Button>
                       <Button
                         onClick={() => onMarkAsPaid && onMarkAsPaid(cost)}
-                        variant="info"
+                        variant="success"
                         size="sm"
                         className="flex items-center"
                       >
@@ -188,6 +191,15 @@ export const CostsList: React.FC<CostsListProps> = ({
                       className="text-secondary-600 hover:text-secondary-800"
                     >
                       <Edit className="h-4 w-4" />
+                    </button>
+                  )}
+                  {isAmountToDefine(cost) && onEditEstimate && (
+                    <button 
+                      onClick={() => onEditEstimate(cost)}
+                      className="text-warning-600 hover:text-warning-800"
+                      title="Editar orçamento"
+                    >
+                      <DollarSign className="h-4 w-4" />
                     </button>
                   )}
                 </div>

@@ -26,34 +26,40 @@ export interface Database {
           id: string;
           tenant_id: string;
           name: string;
-          role: 'Admin' | 'Mechanic' | 'PatioInspector' | 'Sales' | 'Driver' | 'FineAdmin' | 'Manager';
+          role: EmployeeRole;
           employee_code: string | null;
-          contact_info: any;
+          contact_info: ContactInfo;
           active: boolean;
           created_at: string;
           updated_at: string;
+          roles_extra: string[] | null;
+          permissions: Record<string, boolean> | null;
         };
         Insert: {
           id?: string;
           tenant_id: string;
           name: string;
-          role: 'Admin' | 'Mechanic' | 'PatioInspector' | 'Sales' | 'Driver' | 'FineAdmin' | 'Manager';
+          role: EmployeeRole;
           employee_code?: string | null;
-          contact_info?: any;
+          contact_info: ContactInfo;
           active?: boolean;
           created_at?: string;
           updated_at?: string;
+          roles_extra?: string[] | null;
+          permissions?: Record<string, boolean> | null;
         };
         Update: {
           id?: string;
           tenant_id?: string;
           name?: string;
-          role?: 'Admin' | 'Mechanic' | 'PatioInspector' | 'Sales' | 'Driver' | 'FineAdmin' | 'Manager';
+          role?: EmployeeRole;
           employee_code?: string | null;
-          contact_info?: any;
+          contact_info?: ContactInfo;
           active?: boolean;
           created_at?: string;
           updated_at?: string;
+          roles_extra?: string[] | null;
+          permissions?: Record<string, boolean> | null;
         };
       };
       vehicles: {
@@ -685,7 +691,11 @@ export interface Database {
           tenant_id: string;
           cost_id: string;
           inspection_item_id: string;
-          notification_data: any;
+          notification_data: {
+            message: string;
+            recipient: string;
+            metadata?: Record<string, unknown>;
+          };
           status: 'pending' | 'sent' | 'failed';
           sent_at: string | null;
           error_message: string | null;
@@ -696,7 +706,11 @@ export interface Database {
           tenant_id: string;
           cost_id: string;
           inspection_item_id: string;
-          notification_data: any;
+          notification_data: {
+            message: string;
+            recipient: string;
+            metadata?: Record<string, unknown>;
+          };
           status?: 'pending' | 'sent' | 'failed';
           sent_at?: string | null;
           error_message?: string | null;
@@ -707,7 +721,11 @@ export interface Database {
           tenant_id?: string;
           cost_id?: string;
           inspection_item_id?: string;
-          notification_data?: any;
+          notification_data?: {
+            message: string;
+            recipient: string;
+            metadata?: Record<string, unknown>;
+          };
           status?: 'pending' | 'sent' | 'failed';
           sent_at?: string | null;
           error_message?: string | null;
@@ -834,6 +852,53 @@ export interface Database {
           updated_at?: string;
         };
       };
+      vw_employees_email: {
+        Row: {
+          id: string;
+          email: string;
+          active: boolean;
+          status: string | null;
+        };
+        Insert: never;
+        Update: never;
+      };
+      removed_users: {
+        Row: RemovedUser;
+        Insert: Omit<RemovedUser, 'removed_at'>;
+        Update: Partial<Omit<RemovedUser, 'id' | 'removed_at'>>;
+      };
     };
+    Functions: {
+      validate_session: {
+        Args: Record<string, never>
+        Returns: boolean
+      }
+      has_permission: {
+        Args: { required_permission: string }
+        Returns: boolean
+      }
+    }
   };
 }
+
+export interface RemovedUser {
+  id: string;
+  email: string;
+  removed_at: string;
+  reason: string;
+}
+
+export interface ContactInfo {
+  email: string;
+  phone?: string;
+  address?: string;
+  status?: 'active' | 'orphaned' | 'orphaned_duplicate';
+  updated_reason?: string;
+  metadata?: Record<string, string | number | boolean | null>;
+}
+
+export type EmployeeRole = 'Admin' | 'Inspector' | 'FineAdmin' | 'Sales';
+
+export type Employee = Database['public']['Tables']['employees']['Row'];
+export type EmployeeInsert = Database['public']['Tables']['employees']['Insert'];
+export type EmployeeUpdate = Database['public']['Tables']['employees']['Update'];

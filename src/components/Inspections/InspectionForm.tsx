@@ -62,6 +62,7 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
   const [uploadingDashboardPhoto, setUploadingDashboardPhoto] = useState(false);
   const [activeContract, setActiveContract] = useState<any>(null);
   const [availableContracts, setAvailableContracts] = useState<any[]>([]);
+  const [selectedDashboardPhoto, setSelectedDashboardPhoto] = useState<File | null>(null);
 
   // Filter employees to only show PatioInspector role
   const patioInspectors = employees.filter(emp => emp.role === 'PatioInspector' && emp.active);
@@ -195,11 +196,18 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
     setFormData(prev => ({ ...prev, [name]: checked }));
   };
 
-  const handleDashboardPhotoUpload = async (file: File) => {
+  const handleDashboardPhotoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null;
+    setSelectedDashboardPhoto(file);
+  };
+
+  const handleDashboardPhotoUploadClick = async () => {
+    if (!selectedDashboardPhoto) return;
     setUploadingDashboardPhoto(true);
     try {
-      const photoUrl = await uploadPhoto(file);
+      const photoUrl = await uploadPhoto(selectedDashboardPhoto);
       setFormData(prev => ({ ...prev, dashboard_photo_url: photoUrl }));
+      setSelectedDashboardPhoto(null);
       toast.success('Foto do painel enviada com sucesso!');
     } catch (error) {
       console.error('Error uploading dashboard photo:', error);
@@ -262,10 +270,9 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
           <p className="text-sm text-orange-800 mb-4">
             Como há luz de aviso no painel, é recomendado tirar uma foto para documentar o problema.
           </p>
-          
-          <div className="flex items-center space-x-4">
+          <div className="flex flex-col items-center space-y-2 sm:flex-row sm:items-start sm:space-x-4 sm:space-y-0">
             {formData.dashboard_photo_url ? (
-              <div className="relative">
+              <div className="relative mb-2 sm:mb-0">
                 <img 
                   src={formData.dashboard_photo_url} 
                   alt="Foto do painel" 
@@ -280,43 +287,37 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({
                 </button>
               </div>
             ) : (
-              <div className="w-32 h-24 border-2 border-dashed border-orange-300 rounded flex items-center justify-center">
+              <div className="w-32 h-24 border-2 border-dashed border-orange-300 rounded flex items-center justify-center mb-2 sm:mb-0">
                 <Camera className="h-8 w-8 text-orange-400" />
               </div>
             )}
-
-            <div className="flex-1">
-              <label className="cursor-pointer">
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                      handleDashboardPhotoUpload(file);
-                    }
-                  }}
-                  className="hidden"
-                />
-                <Button
-                  type="button"
-                  variant="secondary"
-                  disabled={uploadingDashboardPhoto}
-                  className="flex items-center"
-                >
-                  {uploadingDashboardPhoto ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Enviando...
-                    </>
-                  ) : (
-                    <>
-                      <Upload className="h-4 w-4 mr-2" />
-                      {formData.dashboard_photo_url ? 'Alterar Foto' : 'Enviar Foto'}
-                    </>
-                  )}
-                </Button>
-              </label>
+            <div className="flex flex-col items-center">
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleDashboardPhotoFileChange}
+                className="mb-2"
+                disabled={uploadingDashboardPhoto}
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={uploadingDashboardPhoto || !selectedDashboardPhoto}
+                className="flex items-center"
+                onClick={handleDashboardPhotoUploadClick}
+              >
+                {uploadingDashboardPhoto ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Enviando...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-4 w-4 mr-2" />
+                    {formData.dashboard_photo_url ? 'Alterar Foto' : 'Enviar Foto'}
+                  </>
+                )}
+              </Button>
             </div>
           </div>
         </div>

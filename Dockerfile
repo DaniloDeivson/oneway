@@ -19,8 +19,8 @@ ENV VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 # Set executable permissions for node_modules binaries
 RUN chmod +x node_modules/.bin/*
 
-# Build the application using npx to ensure proper execution
-RUN npx vite build
+# Build the application usando o script padrão do package.json
+RUN npm run build
 
 # List contents of dist directory for debugging
 RUN ls -la /app/dist/

@@ -99,3 +99,33 @@ src/
 ## Licença
 
 Proprietary - Todos os direitos reservados - Desenvolvido por Danilo Deivson Alcantara dos Santos
+
+# Deploy em Produção
+
+## 1. Build e Deploy
+- O Dockerfile e nginx.conf já estão prontos para build e deploy em qualquer serviço que aceite Docker (Railway, Render, etc).
+- O build final é servido via Nginx, com fallback para SPA (React/Vite).
+
+## 2. Configuração de Rede
+- **DNS**: Aponte seu domínio para o IP ou CNAME fornecido pelo serviço de deploy.
+- **HTTPS**: Ative SSL no painel do serviço (a maioria já oferece SSL grátis via Let's Encrypt).
+- **CORS**: Se consumir APIs externas, garanta que as URLs estejam corretas nas variáveis de ambiente.
+
+## 3. Variáveis de Ambiente
+- Configure as URLs de API e outros endpoints no painel do serviço de deploy.
+- Exemplos:
+  - `VITE_API_URL=https://sua-api.com`
+  - `VITE_SUPABASE_URL=...`
+  - `VITE_SUPABASE_ANON_KEY=...`
+
+## 4. Teste em Dispositivos
+- Após deploy, acesse pelo domínio em diferentes dispositivos e redes para garantir funcionamento.
+- Se necessário, limpe cache do navegador e use aba anônima.
+
+## 5. Dúvidas Frequentes
+- **Erro 404 em rotas**: O nginx.conf e _redirects já garantem fallback para SPA.
+- **Problemas de CORS**: Verifique as variáveis de ambiente e configurações da API.
+
+---
+
+Qualquer dúvida, consulte o painel do seu serviço de deploy ou abra um issue!

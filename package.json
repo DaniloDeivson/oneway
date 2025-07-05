@@ -16,7 +16,8 @@
     "supabase:db:pull": "npx supabase db pull",
     "supabase:migration:new": "npx supabase migration new",
     "supabase:migration:up": "npx supabase migration up",
-    "supabase:migration:down": "npx supabase migration down"
+    "supabase:migration:down": "npx supabase migration down",
+    "build-and-dev": "npm run build && npm run dev"
   },
   "dependencies": {
     "@headlessui/react": "^1.7.19",

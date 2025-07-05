@@ -129,3 +129,15 @@ Proprietary - Todos os direitos reservados - Desenvolvido por Danilo Deivson Alc
 ---
 
 Qualquer dúvida, consulte o painel do seu serviço de deploy ou abra um issue!
+
+## Antes de rodar
+Se ainda não existir, crie a network do Traefik:
+
+```sh
+docker network create traefik
+```
+
+Depois rode normalmente:
+```sh
+docker-compose up -d
+```

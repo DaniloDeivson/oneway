@@ -10,6 +10,11 @@ services:
     networks:
       - traefik
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 networks:
   traefik:
